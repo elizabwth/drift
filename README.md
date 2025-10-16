@@ -1,11 +1,12 @@
 # Drift
 In-game text chat for games that do not have text chat
 
-### wishlist
+### Achievements 
 
 
-- [ ] keybindings
-- [ ] picture/screenshot support
-- [ ] discord/steam/etc integration(?) to handle chat
-- [ ] voicelines
-- [ ] external voice line support
+- [ ] Keybindings
+- [ ] Controller quick access bindings
+- [ ] Picture/screenshot support
+- [ ] Discord/steam/etc integration(?) to handle chat
+- [ ] Voicelines
+- [ ] External voice line support
