@@ -1,12 +1,9 @@
 ## Features that would be nice
 
-- [ ] audio clips to be played
-	- [ ] voiceline menu
-		- [ ] voicewheel or voiceline box?
+- [ ] Voicewheel or voiceline box
+	- [ ] Audio clips to be played?
+		- [ ] voiceline menu?
 		- [ ] subtitles?
 		- [ ] hotkey/controller 
-	- [ ] voiceline packs/import
-	- [ ] option to adjust the volume 
-- [ ] independent from others
-	- [ ] how to do
-
+	- [ ] Voiceline packs/import
+	- [ ] Option to adjust the volume 
