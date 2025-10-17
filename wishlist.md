@@ -6,5 +6,5 @@ would be nice 😀
 	- [ ] maybe with the niconico/bilibili style comment section up above (like mgspw)
 	- [ ] potential to install "packs" of audio lines?
 - [ ] agnostic of platforms
-	- [ ] how to theorize
+	- [ ] how to do? theories everyone please!
 
