@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, ipcMain } from 'electron'
 import path from 'path'
 import { fileURLToPath } from 'url'
 
@@ -24,6 +24,13 @@ function createWindow() {
       contextIsolation: true,
       backgroundThrottling: false,
     },
+  })
+
+  // Handle close window request from renderer
+  ipcMain.on('close-window', () => {
+    if (mainWindow) {
+      mainWindow.close()
+    }
   })
 
   // Enable acrylic blur on Windows

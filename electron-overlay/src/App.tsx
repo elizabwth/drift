@@ -4,6 +4,7 @@ import './App.scss'
 function App() {
   const [messages, setMessages] = useState<string[]>([])
   const [inputValue, setInputValue] = useState('')
+  const [isHovered, setIsHovered] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const handleSendMessage = () => {
@@ -19,6 +20,12 @@ function App() {
     }
   }
 
+  const handleClose = () => {
+    if (window.electronAPI) {
+      window.electronAPI.send('close-window')
+    }
+  }
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }
@@ -28,9 +35,15 @@ function App() {
   }, [messages])
 
   return (
-    <div className="app-container">
+    <div
+      className="app-container"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      style={{ opacity: isHovered ? 1 : 0.4 }}
+    >
       <div className="chat-header">
         <h2>Overlay Chat</h2>
+        <button className="close-button" onClick={handleClose}>×</button>
       </div>
 
       <div className="chat-messages">

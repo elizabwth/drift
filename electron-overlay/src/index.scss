@@ -1,3 +1,6 @@
+@import 'colors';
+@import 'values';
+
 * {
   margin: 0;
   padding: 0;
@@ -20,18 +23,18 @@ body {
 }
 
 ::-webkit-scrollbar {
-  width: 8px;
+  width: $scrollbar-width;
 
   &-track {
-    background: rgba(50, 50, 50, 0.75);
+    background: transparent;
   }
 
   &-thumb {
-    background: #555;
-    border-radius: 4px;
+    background: $color-scrollbar;
+    border-radius: $radius-sm;
 
     &:hover {
-      background: #777;
+      background: $color-scrollbar-hover;
     }
   }
 }
