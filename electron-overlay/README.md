@@ -21,7 +21,7 @@ npm run electron:dev
 npm run electron:build
 ```
 
-Built app will be in the `release` directory.
+Built app will be in the `release/{version}` directory.
 
 ## Features
 
