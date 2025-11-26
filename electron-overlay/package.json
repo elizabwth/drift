@@ -13,6 +13,7 @@
     "electron:build": "tsc && vite build && electron-builder"
   },
   "dependencies": {
+    "peerjs": "^1.5.5",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },

@@ -140,3 +140,157 @@
     }
   }
 }
+
+.username-prompt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: $spacing-xl;
+  flex: 1;
+
+  h3 {
+    margin: 0 0 $spacing-lg 0;
+    color: $color-text;
+    font-weight: normal;
+  }
+
+  input {
+    width: 100%;
+    max-width: 250px;
+    padding: $spacing-sm $spacing-md;
+    background: $color-bg-light;
+    border: 1px solid $color-border;
+    border-radius: $radius-md;
+    color: $color-text;
+    font-size: $font-size-sm;
+    margin-bottom: $spacing-md;
+
+    &:focus {
+      outline: none;
+      border-color: $color-border-focus;
+      background: $color-bg-light-hover;
+    }
+  }
+
+  button {
+    padding: $spacing-sm $spacing-xl;
+    background: $color-bg-button;
+    border: 1px solid $color-scrollbar;
+    border-radius: $radius-md;
+    color: $color-text;
+    font-size: $font-size-sm;
+    cursor: pointer;
+    transition: all $transition-fast;
+
+    &:hover {
+      background: $color-bg-button-hover;
+      border-color: $color-border-focus;
+    }
+
+    &:active {
+      background: $color-bg-button-active;
+    }
+  }
+}
+
+.connection-status {
+  display: flex;
+  align-items: center;
+  gap: $spacing-xs;
+  -webkit-app-region: no-drag;
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    transition: background-color $transition-fast;
+
+    &.connected {
+      background-color: #4ade80;
+    }
+
+    &.disconnected {
+      background-color: #ef4444;
+    }
+  }
+
+  .peer-count {
+    font-size: $font-size-xs;
+    color: $color-text-muted;
+  }
+}
+
+.connection-controls {
+  padding: $spacing-sm $spacing-md;
+  background: $color-bg-darker;
+  border-bottom: 1px solid $color-border;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-xs;
+
+  small {
+    color: $color-text-subtle;
+    font-size: $font-size-xs;
+    margin-bottom: 2px;
+  }
+
+  input {
+    padding: $spacing-xs $spacing-sm;
+    background: $color-bg-light;
+    border: 1px solid $color-border;
+    border-radius: $radius-sm;
+    color: $color-text;
+    font-size: $font-size-xs;
+    font-family: monospace;
+
+    &:focus {
+      outline: none;
+      border-color: $color-border-focus;
+      background: $color-bg-light-hover;
+    }
+
+    &[readonly] {
+      cursor: pointer;
+      user-select: all;
+    }
+  }
+
+  .my-peer-id {
+    display: flex;
+    flex-direction: column;
+
+    input {
+      width: 100%;
+    }
+  }
+
+  .connect-peer {
+    display: flex;
+    gap: $spacing-xs;
+
+    input {
+      flex: 1;
+    }
+
+    button {
+      padding: $spacing-xs $spacing-md;
+      background: $color-bg-button;
+      border: 1px solid $color-scrollbar;
+      border-radius: $radius-sm;
+      color: $color-text;
+      font-size: $font-size-xs;
+      cursor: pointer;
+      transition: all $transition-fast;
+
+      &:hover {
+        background: $color-bg-button-hover;
+        border-color: $color-border-focus;
+      }
+
+      &:active {
+        background: $color-bg-button-active;
+      }
+    }
+  }
+}
