@@ -1,7 +1,8 @@
 {
   "name": "electron-overlay-chat",
-  "version": "0.1.0",
+  "version": "0.1.6",
   "description": "An overlay chat app for games without in-game text chat",
+  "author": "Elizabeth",
   "main": "dist-electron/main.js",
   "type": "module",
   "scripts": {
@@ -10,9 +11,11 @@
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\"",
+    "electron:dev:windows": ".\\dev-windows.bat",
     "electron:build": "tsc && vite build && electron-builder"
   },
   "dependencies": {
+    "electron-updater": "^6.8.9",
     "peerjs": "^1.5.5",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
@@ -38,7 +41,7 @@
   },
   "build": {
     "appId": "com.electron.overlay.chat",
-    "productName": "Overlay Chat",
+    "productName": "Drift",
     "directories": {
       "output": "release/${version}"
     },
@@ -47,9 +50,15 @@
       "dist-electron"
     ],
     "win": {
+      "icon": "build/icon.ico",
       "target": [
-        "nsis"
+        "nsis",
+        "portable"
       ]
+    },
+    "publish": {
+      "provider": "generic",
+      "url": "https://bugtit.com/drift/"
     }
   }
 }

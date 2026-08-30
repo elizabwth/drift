@@ -1,0 +1,9 @@
+@echo off
+echo Starting Vite dev server in new window...
+start "Vite Dev Server" cmd /k "npm run dev"
+
+echo Waiting for Vite to start...
+timeout /t 3 /nobreak >nul
+
+echo Starting Electron in new window...
+start "Electron App" cmd /k "npx wait-on http://localhost:5173 && electron ."

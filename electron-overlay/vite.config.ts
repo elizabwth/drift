@@ -15,6 +15,22 @@ export default defineConfig({
         onstart(options) {
           options.reload()
         },
+        vite: {
+          build: {
+            // Electron always loads preload scripts as CommonJS, regardless of
+            // this package's "type": "module" — force cjs output here or the
+            // preload build inherits esm and fails with "Cannot use import
+            // statement outside a module".
+            lib: false,
+            rollupOptions: {
+              input: 'electron/preload.ts',
+              output: {
+                format: 'cjs',
+                entryFileNames: 'preload.js',
+              },
+            },
+          },
+        },
       },
     ]),
     renderer(),
