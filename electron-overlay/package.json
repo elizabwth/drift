@@ -1,6 +1,6 @@
 {
   "name": "electron-overlay-chat",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "An overlay chat app for games without in-game text chat",
   "author": "Elizabeth",
   "main": "dist-electron/main.js",
@@ -55,6 +55,14 @@
         "nsis",
         "portable"
       ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "runAfterFinish": true
     },
     "publish": {
       "provider": "generic",
