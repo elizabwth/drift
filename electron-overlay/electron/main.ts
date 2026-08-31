@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, screen } from 'electron'
 import { autoUpdater } from 'electron-updater'
+import { spawn } from 'child_process'
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
@@ -44,6 +45,65 @@ function saveWindowState(bounds: WindowState) {
 }
 
 ipcMain.handle('get-app-version', () => app.getVersion())
+
+interface ForegroundWindow {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+// No Node package for this - it's a single Win32 call, and pulling in a
+// native module just for GetForegroundWindow risks the same kind of build
+// corruption that broke the v0.1.11 installer. A one-shot PowerShell call
+// is slower but far simpler to keep working.
+function getForegroundWindowBounds(): Promise<ForegroundWindow | null> {
+  return new Promise((resolve) => {
+    const script = `
+Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+public class DriftWin32 {
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
+  public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
+}
+'@
+$h = [DriftWin32]::GetForegroundWindow()
+$r = New-Object DriftWin32+RECT
+[DriftWin32]::GetWindowRect($h, [ref]$r) | Out-Null
+@{ x = $r.Left; y = $r.Top; width = ($r.Right - $r.Left); height = ($r.Bottom - $r.Top) } | ConvertTo-Json -Compress
+`
+    const ps = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script])
+    let out = ''
+    ps.stdout.on('data', (d) => {
+      out += d
+    })
+    ps.on('close', () => {
+      try {
+        resolve(JSON.parse(out.trim()))
+      } catch {
+        resolve(null)
+      }
+    })
+    ps.on('error', () => resolve(null))
+  })
+}
+
+// Docks the window to the right edge of whatever window currently has
+// focus (presumed to be the game), top-aligned, keeping Drift's own
+// width/height untouched.
+async function snapToForegroundWindow() {
+  if (!mainWindow || isMinimized) return
+  const fg = await getForegroundWindowBounds()
+  if (!fg || fg.width < 300 || fg.height < 300) return
+  const current = mainWindow.getBounds()
+  // If the "foreground window" is just us, there's nothing to dock against.
+  if (Math.abs(fg.x - current.x) < 5 && Math.abs(fg.y - current.y) < 5) return
+  const display = screen.getDisplayMatching(fg)
+  const x = Math.min(fg.x + fg.width, display.workArea.x + display.workArea.width - current.width)
+  mainWindow.setBounds({ x, y: fg.y, width: current.width, height: current.height })
+}
 
 let mainWindow: BrowserWindow | null = null
 // The window's bounds while NOT shrunk to the corner bubble - this is what
@@ -96,9 +156,23 @@ function createWindow() {
   // fight. Re-asserting it on every blur covers the case where clicking
   // into the game steals topmost status out from under us.
   mainWindow.setAlwaysOnTop(true, 'screen-saver')
+
+  // The first time focus leaves Drift, it's presumably because the user
+  // clicked back into their game - snap to dock against it once. Only
+  // once, so we don't keep yanking the window around every time they
+  // alt-tab to something else afterward.
+  let hasAutoSnapped = false
   mainWindow.on('blur', () => {
     mainWindow?.setAlwaysOnTop(true, 'screen-saver')
+    if (!hasAutoSnapped) {
+      hasAutoSnapped = true
+      snapToForegroundWindow()
+    }
   })
+
+  // Also try once shortly after launch, in case the game was already
+  // focused before Drift finished opening.
+  setTimeout(() => snapToForegroundWindow(), 1500)
 
   mainWindow.on('resize', persistBoundsDebounced)
   mainWindow.on('move', persistBoundsDebounced)
