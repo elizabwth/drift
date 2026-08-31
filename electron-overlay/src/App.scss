@@ -136,12 +136,18 @@
   }
 
   .header-id {
+    -webkit-app-region: no-drag;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     font-family: monospace;
     font-size: $font-size-sm;
+    cursor: pointer;
+
+    &:hover {
+      color: $color-text;
+    }
   }
 
   .minimize-button,
@@ -348,102 +354,22 @@
   }
 }
 
-.connection-controls {
-  padding: $spacing-sm $spacing-md;
+.connect-status {
+  padding: $spacing-xs $spacing-md;
   background: $color-bg-darker;
   border-bottom: 1px solid $color-border;
-  display: flex;
-  flex-direction: column;
-  gap: $spacing-xs;
+  font-size: $font-size-xs;
+  animation: slideInFade $transition-normal;
 
-  small {
-    color: $color-text-subtle;
-    font-size: $font-size-xs;
-    margin-bottom: 2px;
+  &.connect-status-connecting {
+    color: $color-text-muted;
   }
 
-  input {
-    padding: $spacing-xs $spacing-sm;
-    background: $color-bg-light;
-    border: 1px solid $color-border;
-    border-radius: $radius-sm;
-    color: $color-text;
-    font-size: $font-size-xs;
-    font-family: monospace;
-
-    &:focus {
-      outline: none;
-      border-color: $color-border-focus;
-      background: $color-bg-light-hover;
-    }
-
-    &[readonly] {
-      cursor: pointer;
-      user-select: all;
-    }
+  &.connect-status-success {
+    color: #4ade80;
   }
 
-  .my-peer-id {
-    display: flex;
-    align-items: center;
-    gap: $spacing-xs;
-
-    small {
-      margin-bottom: 0;
-      white-space: nowrap;
-    }
-
-    input {
-      flex: 1;
-      min-width: 0;
-    }
-  }
-
-  .connect-peer {
-    display: flex;
-    gap: $spacing-xs;
-
-    input {
-      flex: 1;
-    }
-
-    button {
-      padding: $spacing-xs $spacing-md;
-      background: $color-bg-button;
-      border: 1px solid $color-scrollbar;
-      border-radius: $radius-sm;
-      color: $color-text;
-      font-size: $font-size-xs;
-      cursor: pointer;
-      transition: all $transition-fast;
-
-      &:hover {
-        background: $color-bg-button-hover;
-        border-color: $color-border-focus;
-      }
-
-      &:active {
-        background: $color-bg-button-active;
-      }
-    }
-  }
-
-  .connect-status {
-    font-size: $font-size-xs;
-    padding: $spacing-xs $spacing-sm;
-    border-radius: $radius-sm;
-    animation: slideInFade $transition-normal;
-
-    &.connect-status-connecting {
-      color: $color-text-muted;
-    }
-
-    &.connect-status-success {
-      color: #4ade80;
-    }
-
-    &.connect-status-error {
-      color: #ef4444;
-    }
+  &.connect-status-error {
+    color: #ef4444;
   }
 }

@@ -22,8 +22,6 @@ function App() {
   const [roomId, setRoomId] = useState<string | null>(null)
   const [usernameInput, setUsernameInput] = useState(() => localStorage.getItem('drift-username') || '')
   const [roomIdInput, setRoomIdInput] = useState(() => localStorage.getItem('drift-room-id') || '')
-  const [myPeerId, setMyPeerId] = useState<string>('')
-  const [connectToPeerId, setConnectToPeerId] = useState('')
   const [connectedPeers, setConnectedPeers] = useState<DataConnection[]>([])
   const [connectStatus, setConnectStatus] = useState<{ type: 'connecting' | 'success' | 'error'; message: string } | null>(null)
   const [appVersion, setAppVersion] = useState('')
@@ -84,65 +82,88 @@ function App() {
   )
 
   // Initialize PeerJS. The peer ID is derived from the room ID instead of
-  // PeerJS's default random UUID, so it's short and something the user
-  // effectively "set" themselves rather than a cryptic ID they'd have to
-  // copy/paste around. This is deliberately independent of the username -
-  // the room ID is the connection address, the username is just a label.
+  // PeerJS's default random UUID. Whoever registers the room ID first
+  // becomes the host and just waits for connections; anyone who types the
+  // same room ID afterward gets an unavailable-id error back from the
+  // broker - rather than treating that as a failure, they register under
+  // their own id and connect straight to the host. So two people entering
+  // the same room ID is the entire "connect to each other" mechanism, no
+  // manual paste-and-connect step required.
   useEffect(() => {
     if (!roomId) return
 
     const slugify = (s: string) =>
       s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
 
+    const roomSlug = slugify(roomId) || 'drift-room'
     let destroyed = false
     let peer: Peer
 
-    const connect = (id: string) => {
-      peer = new Peer(id, {
+    const iceServers = [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:global.stun.twilio.com:3478' },
+      // STUN alone can't get two peers connected when either side is
+      // behind a symmetric NAT/CGNAT (common on home ISPs) - it needs an
+      // actual relay to fall back to. Open Relay Project is a free public
+      // TURN service for exactly this.
+      { urls: 'stun:openrelay.metered.ca:80' },
+      { urls: 'turn:openrelay.metered.ca:80', username: 'REDACTED_DEMO_CREDENTIAL', credential: 'REDACTED_DEMO_CREDENTIAL' },
+      { urls: 'turn:openrelay.metered.ca:443', username: 'REDACTED_DEMO_CREDENTIAL', credential: 'REDACTED_DEMO_CREDENTIAL' },
+      { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'REDACTED_DEMO_CREDENTIAL', credential: 'REDACTED_DEMO_CREDENTIAL' }
+    ]
+
+    const createPeer = (id: string) =>
+      new Peer(id, {
         host: '0.peerjs.com',
         port: 443,
         path: '/',
         secure: true,
-        config: {
-          iceServers: [
-            { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:global.stun.twilio.com:3478' }
-          ]
-        }
+        config: { iceServers }
       })
+
+    const joinAsGuest = () => {
+      peer = createPeer(`${roomSlug}-${Math.floor(1000 + Math.random() * 9000)}`)
       peerRef.current = peer
 
-      peer.on('open', (openedId) => {
-        setMyPeerId(openedId)
+      peer.on('open', () => {
+        setConnectStatus({ type: 'connecting', message: `Joining ${roomId}...` })
+        if (connectTimeoutRef.current) window.clearTimeout(connectTimeoutRef.current)
+        connectTimeoutRef.current = window.setTimeout(() => {
+          setConnectStatus((prev) => (prev?.type === 'connecting' ? { type: 'error', message: 'Connection timed out' } : prev))
+        }, 10000)
+        setupConnection(peer.connect(roomSlug))
       })
 
-      peer.on('connection', (conn) => {
-        setupConnection(conn)
-      })
+      peer.on('connection', (conn) => setupConnection(conn))
 
       peer.on('error', (err) => {
-        // Someone else is already using this short ID on the broker -
-        // fall back to a suffixed variant rather than a raw UUID.
-        if (err.type === 'unavailable-id' && !destroyed) {
-          peer.destroy()
-          connect(`${id}-${Math.floor(1000 + Math.random() * 9000)}`)
-          return
-        }
-        // Outgoing connect attempts fail here (on the peer, not the
-        // connection) when the target ID isn't registered with the broker.
         if (err.type === 'peer-unavailable') {
           if (connectTimeoutRef.current) {
             window.clearTimeout(connectTimeoutRef.current)
             connectTimeoutRef.current = null
           }
-          setConnectStatus({ type: 'error', message: "Couldn't find that peer" })
+          setConnectStatus({ type: 'error', message: "Couldn't find that room" })
           return
         }
         console.error('Peer error:', err)
       })
     }
 
-    connect(slugify(roomId) || 'drift-room')
+    peer = createPeer(roomSlug)
+    peerRef.current = peer
+
+    peer.on('connection', (conn) => {
+      setupConnection(conn)
+    })
+
+    peer.on('error', (err) => {
+      if (err.type === 'unavailable-id' && !destroyed) {
+        peer.destroy()
+        joinAsGuest()
+        return
+      }
+      console.error('Peer error:', err)
+    })
 
     return () => {
       destroyed = true
@@ -187,24 +208,6 @@ function App() {
     })
   }
 
-  const handleConnectToPeer = () => {
-    if (!peerRef.current || !connectToPeerId.trim()) return
-
-    const targetId = connectToPeerId.trim()
-    setConnectStatus({ type: 'connecting', message: `Connecting to ${targetId}...` })
-
-    if (connectTimeoutRef.current) {
-      window.clearTimeout(connectTimeoutRef.current)
-    }
-    connectTimeoutRef.current = window.setTimeout(() => {
-      setConnectStatus((prev) => (prev?.type === 'connecting' ? { type: 'error', message: 'Connection timed out' } : prev))
-    }, 10000)
-
-    const conn = peerRef.current.connect(targetId)
-    setupConnection(conn)
-    setConnectToPeerId('')
-  }
-
   const handleSendMessage = () => {
     if (!inputValue.trim() || !username) return
 
@@ -247,16 +250,14 @@ function App() {
     }
   }
 
-  const handleConnectKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleConnectToPeer()
-    }
-  }
-
   const handleClose = () => {
     if (window.electronAPI) {
       window.electronAPI.send('close-window')
     }
+  }
+
+  const handleCopyRoomId = () => {
+    if (roomId) navigator.clipboard.writeText(roomId)
   }
 
   // Shrinks the actual window down to a small bubble in the corner rather
@@ -343,7 +344,7 @@ function App() {
         style={containerStyle}
       >
         <div className="chat-header">
-          <h2 className="header-id" title={myPeerId}>{myPeerId || 'Drift'}</h2>
+          <h2 className="header-id" title={`${roomId} - click to copy`} onClick={handleCopyRoomId}>{roomId}</h2>
           <div className="connection-status">
             <span className={`status-dot ${connectedPeers.length > 0 ? 'connected' : 'disconnected'}`} />
             <span className="peer-count">{connectedPeers.length}</span>
@@ -352,36 +353,11 @@ function App() {
           <button className="close-button" onClick={handleClose}>×</button>
         </div>
 
-        <div className="connection-controls">
-          <div className="my-peer-id">
-            <small>Room ID:</small>
-            <input
-              type="text"
-              value={myPeerId}
-              readOnly
-              onClick={(e) => {
-                e.currentTarget.select()
-                navigator.clipboard.writeText(myPeerId)
-              }}
-              placeholder="Connecting..."
-            />
+        {connectStatus && (
+          <div className={`connect-status connect-status-${connectStatus.type}`}>
+            {connectStatus.message}
           </div>
-          <div className="connect-peer">
-            <input
-              type="text"
-              value={connectToPeerId}
-              onChange={(e) => setConnectToPeerId(e.target.value)}
-              onKeyPress={handleConnectKeyPress}
-              placeholder="Paste room ID to connect..."
-            />
-            <button onClick={handleConnectToPeer}>Connect</button>
-          </div>
-          {connectStatus && (
-            <div className={`connect-status connect-status-${connectStatus.type}`}>
-              {connectStatus.message}
-            </div>
-          )}
-        </div>
+        )}
 
         <div className="chat-messages">
           {messages.length === 0 ? (
