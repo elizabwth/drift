@@ -12,6 +12,7 @@ function App() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [inputValue, setInputValue] = useState('')
   const [isHovered, setIsHovered] = useState(false)
+  const [isMinimized, setIsMinimized] = useState(false)
   const [username, setUsername] = useState<string | null>(() =>
     localStorage.getItem('drift-username')
   )
@@ -19,10 +20,12 @@ function App() {
   const [myPeerId, setMyPeerId] = useState<string>('')
   const [connectToPeerId, setConnectToPeerId] = useState('')
   const [connectedPeers, setConnectedPeers] = useState<DataConnection[]>([])
+  const [connectStatus, setConnectStatus] = useState<{ type: 'connecting' | 'success' | 'error'; message: string } | null>(null)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const peerRef = useRef<Peer | null>(null)
   const connectionsRef = useRef<DataConnection[]>([])
+  const connectTimeoutRef = useRef<number | null>(null)
 
   // The window itself is always transparent at the OS level; whether it
   // looks solid or see-through comes entirely from the panel's own CSS
@@ -118,6 +121,16 @@ function App() {
           connect(`${id}-${Math.floor(1000 + Math.random() * 9000)}`)
           return
         }
+        // Outgoing connect attempts fail here (on the peer, not the
+        // connection) when the target ID isn't registered with the broker.
+        if (err.type === 'peer-unavailable') {
+          if (connectTimeoutRef.current) {
+            window.clearTimeout(connectTimeoutRef.current)
+            connectTimeoutRef.current = null
+          }
+          setConnectStatus({ type: 'error', message: "Couldn't find that peer" })
+          return
+        }
         console.error('Peer error:', err)
       })
     }
@@ -135,6 +148,15 @@ function App() {
       console.log('Connected to peer:', conn.peer)
       connectionsRef.current.push(conn)
       setConnectedPeers([...connectionsRef.current])
+
+      if (connectTimeoutRef.current) {
+        window.clearTimeout(connectTimeoutRef.current)
+        connectTimeoutRef.current = null
+      }
+      setConnectStatus({ type: 'success', message: `Connected to ${conn.peer}` })
+      window.setTimeout(() => {
+        setConnectStatus((prev) => (prev?.message === `Connected to ${conn.peer}` ? null : prev))
+      }, 3000)
     })
 
     conn.on('data', (data) => {
@@ -147,12 +169,31 @@ function App() {
       connectionsRef.current = connectionsRef.current.filter((c) => c !== conn)
       setConnectedPeers([...connectionsRef.current])
     })
+
+    conn.on('error', (err) => {
+      console.error('Connection error:', err)
+      if (connectTimeoutRef.current) {
+        window.clearTimeout(connectTimeoutRef.current)
+        connectTimeoutRef.current = null
+      }
+      setConnectStatus({ type: 'error', message: 'Connection failed' })
+    })
   }
 
   const handleConnectToPeer = () => {
     if (!peerRef.current || !connectToPeerId.trim()) return
 
-    const conn = peerRef.current.connect(connectToPeerId.trim())
+    const targetId = connectToPeerId.trim()
+    setConnectStatus({ type: 'connecting', message: `Connecting to ${targetId}...` })
+
+    if (connectTimeoutRef.current) {
+      window.clearTimeout(connectTimeoutRef.current)
+    }
+    connectTimeoutRef.current = window.setTimeout(() => {
+      setConnectStatus((prev) => (prev?.type === 'connecting' ? { type: 'error', message: 'Connection timed out' } : prev))
+    }, 10000)
+
+    const conn = peerRef.current.connect(targetId)
     setupConnection(conn)
     setConnectToPeerId('')
   }
@@ -208,6 +249,15 @@ function App() {
     }
   }
 
+  // Shrinks the actual window down to a small bubble in the corner rather
+  // than an OS-level minimize, which would just vanish behind a fullscreen
+  // game. Toggling back snaps the window to whatever bounds it had before.
+  const handleToggleMinimize = () => {
+    const next = !isMinimized
+    setIsMinimized(next)
+    window.electronAPI?.send('toggle-minimize', next)
+  }
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }
@@ -215,6 +265,17 @@ function App() {
   useEffect(() => {
     scrollToBottom()
   }, [messages])
+
+  if (isMinimized) {
+    return (
+      <div className="app-shell">
+        <div className="app-container app-container-mini" onClick={handleToggleMinimize}>
+          <img src="./icon.png" alt="Drift" className="mini-icon" />
+          <span className={`status-dot ${connectedPeers.length > 0 ? 'connected' : 'disconnected'}`} />
+        </div>
+      </div>
+    )
+  }
 
   // Username prompt
   if (!username) {
@@ -228,6 +289,7 @@ function App() {
         >
           <div className="chat-header">
             <h2>Drift</h2>
+            <button className="minimize-button" onClick={handleToggleMinimize}>–</button>
             <button className="close-button" onClick={handleClose}>×</button>
           </div>
           <div className="username-prompt">
@@ -262,6 +324,7 @@ function App() {
             <span className={`status-dot ${connectedPeers.length > 0 ? 'connected' : 'disconnected'}`} />
             <span className="peer-count">{connectedPeers.length}</span>
           </div>
+          <button className="minimize-button" onClick={handleToggleMinimize}>–</button>
           <button className="close-button" onClick={handleClose}>×</button>
         </div>
 
@@ -289,6 +352,11 @@ function App() {
             />
             <button onClick={handleConnectToPeer}>Connect</button>
           </div>
+          {connectStatus && (
+            <div className={`connect-status connect-status-${connectStatus.type}`}>
+              {connectStatus.message}
+            </div>
+          )}
         </div>
 
         <div className="chat-messages">

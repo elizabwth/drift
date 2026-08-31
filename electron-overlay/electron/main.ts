@@ -1,5 +1,6 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain, screen } from 'electron'
 import { autoUpdater } from 'electron-updater'
+import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 
@@ -8,13 +9,67 @@ const __dirname = path.dirname(__filename)
 
 const MIN_WIDTH = 280
 const MIN_HEIGHT = 300
+const MINI_SIZE = 48
+
+// Remembers window position/size across launches. Just x/y/width/height -
+// nothing sensitive, safe to keep in userData alongside electron-updater's
+// own cache.
+const STATE_FILE = path.join(app.getPath('userData'), 'window-state.json')
+
+interface WindowState {
+  x?: number
+  y?: number
+  width: number
+  height: number
+}
+
+function loadWindowState(): WindowState {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(STATE_FILE, 'utf-8'))
+    if (typeof parsed.width === 'number' && typeof parsed.height === 'number') {
+      return parsed
+    }
+  } catch {
+    // No saved state yet (first launch) or the file is corrupt - use defaults.
+  }
+  return { width: 400, height: 600 }
+}
+
+function saveWindowState(bounds: WindowState) {
+  try {
+    fs.writeFileSync(STATE_FILE, JSON.stringify(bounds))
+  } catch (err) {
+    console.error('Failed to save window state:', err)
+  }
+}
 
 let mainWindow: BrowserWindow | null = null
+// The window's bounds while NOT shrunk to the corner bubble - this is what
+// gets persisted and what "restore" snaps back to, so minimizing never
+// clobbers the size/position the user actually cares about remembering.
+let normalBounds: WindowState = { width: 400, height: 600 }
+let isMinimized = false
+let saveStateTimeout: ReturnType<typeof setTimeout> | null = null
+
+function persistBoundsDebounced() {
+  if (isMinimized || !mainWindow) return
+  if (saveStateTimeout) clearTimeout(saveStateTimeout)
+  saveStateTimeout = setTimeout(() => {
+    if (!mainWindow) return
+    normalBounds = mainWindow.getBounds()
+    saveWindowState(normalBounds)
+  }, 400)
+}
 
 function createWindow() {
+  const savedState = loadWindowState()
+  normalBounds = savedState
+
   mainWindow = new BrowserWindow({
-    width: 400,
-    height: 600,
+    width: savedState.width,
+    height: savedState.height,
+    x: savedState.x,
+    y: savedState.y,
     minWidth: MIN_WIDTH,
     minHeight: MIN_HEIGHT,
     frame: false,
@@ -31,6 +86,35 @@ function createWindow() {
       contextIsolation: true,
       backgroundThrottling: false,
     },
+  })
+
+  mainWindow.on('resize', persistBoundsDebounced)
+  mainWindow.on('move', persistBoundsDebounced)
+
+  // Custom "minimize": rather than the OS taskbar minimize (useless for an
+  // always-on-top overlay sitting over a fullscreen game), shrink the actual
+  // window down to a small bubble in the corner, then snap back to whatever
+  // bounds it had before on restore.
+  ipcMain.on('toggle-minimize', (_event, minimized: boolean) => {
+    if (!mainWindow) return
+
+    if (minimized) {
+      normalBounds = mainWindow.getBounds()
+      isMinimized = true
+      const display = screen.getDisplayMatching(normalBounds)
+      const margin = 12
+      mainWindow.setMinimumSize(MINI_SIZE, MINI_SIZE)
+      mainWindow.setBounds({
+        x: display.workArea.x + display.workArea.width - MINI_SIZE - margin,
+        y: display.workArea.y + margin,
+        width: MINI_SIZE,
+        height: MINI_SIZE,
+      })
+    } else {
+      isMinimized = false
+      mainWindow.setMinimumSize(MIN_WIDTH, MIN_HEIGHT)
+      mainWindow.setBounds(normalBounds)
+    }
   })
 
   // Handle close window request from renderer
@@ -111,4 +195,12 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()
   }
+})
+
+app.on('before-quit', () => {
+  if (saveStateTimeout) clearTimeout(saveStateTimeout)
+  if (!isMinimized && mainWindow) {
+    normalBounds = mainWindow.getBounds()
+  }
+  saveWindowState(normalBounds)
 })
