@@ -151,7 +151,8 @@
   }
 
   .minimize-button,
-  .close-button {
+  .close-button,
+  .volume-button {
     -webkit-app-region: no-drag;
     background: transparent;
     border: none;
@@ -173,6 +174,29 @@
 
     &:active {
       color: $color-text-subtle;
+    }
+  }
+
+  .volume-control {
+    position: relative;
+    -webkit-app-region: no-drag;
+  }
+
+  .volume-popover {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: $spacing-xs;
+    padding: $spacing-sm;
+    background: $color-bg-light;
+    border: 1px solid $color-border;
+    border-radius: $radius-sm;
+    z-index: 1;
+
+    input[type='range'] {
+      width: 90px;
+      accent-color: $color-border-focus;
+      cursor: pointer;
     }
   }
 

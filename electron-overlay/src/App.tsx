@@ -11,7 +11,8 @@ interface ChatMessage {
 // A short synthesized blip (no audio asset needed) - a quick rising square
 // wave, like a retro game UI beep (RollerCoaster Tycoon click / Borderlands
 // skill point).
-const playBleep = (startFreq: number, endFreq: number) => {
+const playBleep = (startFreq: number, endFreq: number, volume: number) => {
+  if (volume <= 0) return
   try {
     const ctx = new AudioContext()
     const osc = ctx.createOscillator()
@@ -19,7 +20,7 @@ const playBleep = (startFreq: number, endFreq: number) => {
     osc.type = 'square'
     osc.frequency.setValueAtTime(startFreq, ctx.currentTime)
     osc.frequency.exponentialRampToValueAtTime(endFreq, ctx.currentTime + 0.08)
-    gain.gain.setValueAtTime(0.12, ctx.currentTime)
+    gain.gain.setValueAtTime(0.05 * (volume / 100), ctx.currentTime)
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12)
     osc.connect(gain)
     gain.connect(ctx.destination)
@@ -48,12 +49,27 @@ function App() {
   const [roomIdInput, setRoomIdInput] = useState(() => localStorage.getItem('drift-room-id') || '')
   const [connectedPeers, setConnectedPeers] = useState<DataConnection[]>([])
   const [connectStatus, setConnectStatus] = useState<{ type: 'connecting' | 'success' | 'error'; message: string } | null>(null)
+  // 0-100; 0 doubles as "muted" rather than tracking a separate flag.
+  const [volume, setVolume] = useState(() => {
+    const saved = localStorage.getItem('drift-volume')
+    return saved !== null ? Number(saved) : 50
+  })
+  const [showVolumePopover, setShowVolumePopover] = useState(false)
   const [appVersion, setAppVersion] = useState('')
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const peerRef = useRef<Peer | null>(null)
   const connectionsRef = useRef<DataConnection[]>([])
   const connectTimeoutRef = useRef<number | null>(null)
+  // A ref (not just the state) because the connection's own event handlers
+  // are registered once, inside a useEffect closure keyed on the room -
+  // they'd otherwise keep seeing whatever volume was set at join time.
+  const volumeRef = useRef(volume)
+
+  useEffect(() => {
+    volumeRef.current = volume
+    localStorage.setItem('drift-volume', String(volume))
+  }, [volume])
 
   // The window itself is always transparent at the OS level; whether it
   // looks solid or see-through comes entirely from the panel's own CSS
@@ -222,7 +238,7 @@ function App() {
     conn.on('data', (data) => {
       const msg = data as ChatMessage
       setMessages((prev) => [...prev, msg])
-      playBleep(660, 440)
+      playBleep(660, 440, volumeRef.current)
     })
 
     conn.on('close', () => {
@@ -272,7 +288,7 @@ function App() {
       conn.send(msg)
     })
 
-    playBleep(880, 1320)
+    playBleep(880, 1320, volumeRef.current)
     setInputValue('')
   }
 
@@ -419,6 +435,34 @@ function App() {
           <div className="connection-status">
             <span className={`status-dot ${connectedPeers.length > 0 ? 'connected' : 'disconnected'}`} />
             <span className="peer-count">{connectedPeers.length}</span>
+          </div>
+          <div className="volume-control">
+            <button className="volume-button" onClick={() => setShowVolumePopover((v) => !v)}>
+              {volume === 0 ? (
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                  <line x1="23" y1="9" x2="17" y2="15" />
+                  <line x1="17" y1="9" x2="23" y2="15" />
+                </svg>
+              ) : (
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                  <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                  <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+                </svg>
+              )}
+            </button>
+            {showVolumePopover && (
+              <div className="volume-popover">
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={volume}
+                  onChange={(e) => setVolume(Number(e.target.value))}
+                />
+              </div>
+            )}
           </div>
           <button className="minimize-button" onClick={handleToggleMinimize}>–</button>
           <button className="close-button" onClick={handleClose}>×</button>

@@ -90,6 +90,16 @@ function createWindow() {
     },
   })
 
+  // Plain alwaysOnTop:true only claims a "floating" z-order level, which
+  // plenty of games can still beat once clicked/focused. 'screen-saver' is
+  // the highest level Electron exposes and is what actually wins that
+  // fight. Re-asserting it on every blur covers the case where clicking
+  // into the game steals topmost status out from under us.
+  mainWindow.setAlwaysOnTop(true, 'screen-saver')
+  mainWindow.on('blur', () => {
+    mainWindow?.setAlwaysOnTop(true, 'screen-saver')
+  })
+
   mainWindow.on('resize', persistBoundsDebounced)
   mainWindow.on('move', persistBoundsDebounced)
 
