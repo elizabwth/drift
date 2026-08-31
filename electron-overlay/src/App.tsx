@@ -71,6 +71,13 @@ function App() {
     localStorage.setItem('drift-volume', String(volume))
   }, [volume])
 
+  // The same web bundle also runs standalone in a browser/WebView (e.g.
+  // the Android build) - every window.electronAPI call is already
+  // optional-chained so nothing breaks there, but the minimize/close
+  // buttons would be dead controls with no native window behind them,
+  // so just don't render them outside Electron.
+  const isElectron = Boolean(window.electronAPI)
+
   // The window itself is always transparent at the OS level; whether it
   // looks solid or see-through comes entirely from the panel's own CSS
   // background/opacity below. Solid while setting up, see-through once
@@ -108,7 +115,7 @@ function App() {
     window.addEventListener('mouseup', onMouseUp)
   }
 
-  const resizeHandles = (
+  const resizeHandles = isElectron ? (
     <>
       <div className="resize-handle resize-handle-top" onMouseDown={startResize('top')} />
       <div className="resize-handle resize-handle-left" onMouseDown={startResize('left')} />
@@ -119,7 +126,7 @@ function App() {
       <div className="resize-handle resize-handle-bottom" onMouseDown={startResize('bottom')} />
       <div className="resize-handle resize-handle-corner resize-handle-br" onMouseDown={startResize('bottom-right')} />
     </>
-  )
+  ) : null
 
   // Initialize PeerJS. The peer ID is derived from the room ID instead of
   // PeerJS's default random UUID. Whoever registers the room ID first
@@ -393,8 +400,12 @@ function App() {
         >
           <div className="chat-header">
             <h2>Drift</h2>
-            <button className="minimize-button" onClick={handleToggleMinimize}>–</button>
-            <button className="close-button" onClick={handleClose}>×</button>
+            {isElectron && (
+              <>
+                <button className="minimize-button" onClick={handleToggleMinimize}>–</button>
+                <button className="close-button" onClick={handleClose}>×</button>
+              </>
+            )}
           </div>
           <div className="username-prompt">
             <h3>Join a room</h3>
@@ -460,8 +471,12 @@ function App() {
               </div>
             )}
           </div>
-          <button className="minimize-button" onClick={handleToggleMinimize}>–</button>
-          <button className="close-button" onClick={handleClose}>×</button>
+          {isElectron && (
+            <>
+              <button className="minimize-button" onClick={handleToggleMinimize}>–</button>
+              <button className="close-button" onClick={handleClose}>×</button>
+            </>
+          )}
         </div>
 
         <div className="room-bar">
