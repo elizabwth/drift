@@ -1,6 +1,6 @@
 {
   "name": "electron-overlay-chat",
-  "version": "0.1.16",
+  "version": "0.1.17",
   "description": "An overlay chat app for games without in-game text chat",
   "author": "Elizabeth",
   "main": "dist-electron/main.js",

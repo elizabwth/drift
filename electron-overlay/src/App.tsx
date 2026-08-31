@@ -238,7 +238,7 @@ function App() {
     conn.on('data', (data) => {
       const msg = data as ChatMessage
       setMessages((prev) => [...prev, msg])
-      playBleep(660, 440, volumeRef.current)
+      playBleep(880, 1320, volumeRef.current)
     })
 
     conn.on('close', () => {
@@ -288,7 +288,7 @@ function App() {
       conn.send(msg)
     })
 
-    playBleep(880, 1320, volumeRef.current)
+    playBleep(660, 440, volumeRef.current)
     setInputValue('')
   }
 
