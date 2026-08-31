@@ -431,11 +431,7 @@ function App() {
         style={containerStyle}
       >
         <div className="chat-header">
-          <h2 className="header-id" title={`${roomId} - click to copy`} onClick={handleCopyRoomId}>{roomId}</h2>
-          <div className="connection-status">
-            <span className={`status-dot ${connectedPeers.length > 0 ? 'connected' : 'disconnected'}`} />
-            <span className="peer-count">{connectedPeers.length}</span>
-          </div>
+          <h2>Drift</h2>
           <div className="volume-control">
             <button className="volume-button" onClick={() => setShowVolumePopover((v) => !v)}>
               {volume === 0 ? (
@@ -466,6 +462,14 @@ function App() {
           </div>
           <button className="minimize-button" onClick={handleToggleMinimize}>–</button>
           <button className="close-button" onClick={handleClose}>×</button>
+        </div>
+
+        <div className="room-bar">
+          <span className="room-bar-id" title={`${roomId} - click to copy`} onClick={handleCopyRoomId}>{roomId}</span>
+          <div className="connection-status">
+            <span className={`status-dot ${connectedPeers.length > 0 ? 'connected' : 'disconnected'}`} />
+            <span className="peer-count">{connectedPeers.length}</span>
+          </div>
         </div>
 
         {connectStatus && (

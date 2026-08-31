@@ -135,21 +135,6 @@
     color: $color-text-muted;
   }
 
-  .header-id {
-    -webkit-app-region: no-drag;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-family: monospace;
-    font-size: $font-size-sm;
-    cursor: pointer;
-
-    &:hover {
-      color: $color-text;
-    }
-  }
-
   .minimize-button,
   .close-button,
   .volume-button {
@@ -200,6 +185,31 @@
     }
   }
 
+}
+
+.room-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-sm;
+  padding: $spacing-xs $spacing-lg;
+  background: $color-bg-darker;
+  border-bottom: 1px solid $color-border;
+
+  .room-bar-id {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: monospace;
+    font-size: $font-size-sm;
+    color: $color-text-muted;
+    cursor: pointer;
+
+    &:hover {
+      color: $color-text;
+    }
+  }
 }
 
 .chat-messages {
