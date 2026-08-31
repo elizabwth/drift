@@ -66,9 +66,16 @@ using System.Runtime.InteropServices;
 public class DriftWin32 {
   [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
   [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
+  [DllImport("user32.dll")] public static extern IntPtr SetThreadDpiAwarenessContext(IntPtr dpiContext);
   public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
 }
 '@
+# PowerShell isn't DPI-aware by default, so GetWindowRect would otherwise
+# return coordinates pre-scaled for a DPI-unaware caller instead of real
+# physical pixels. Force per-monitor-v2 awareness on this thread so the
+# numbers we hand back are unambiguous, and convertible on the Electron
+# side via screen.screenToDipPoint.
+[DriftWin32]::SetThreadDpiAwarenessContext([IntPtr]::new(-4)) | Out-Null
 $h = [DriftWin32]::GetForegroundWindow()
 $r = New-Object DriftWin32+RECT
 [DriftWin32]::GetWindowRect($h, [ref]$r) | Out-Null
@@ -95,8 +102,22 @@ $r = New-Object DriftWin32+RECT
 // width/height untouched.
 async function snapToForegroundWindow() {
   if (!mainWindow || isMinimized) return
-  const fg = await getForegroundWindowBounds()
-  if (!fg || fg.width < 300 || fg.height < 300) return
+  const raw = await getForegroundWindowBounds()
+  if (!raw || raw.width < 300 || raw.height < 300) return
+
+  // GetWindowRect (via the PowerShell helper) returns physical pixels;
+  // BrowserWindow.setBounds expects DIP - convert both corners rather than
+  // just scaling width/height by a single factor, since that holds even
+  // if the window happens to straddle two differently-scaled monitors.
+  const topLeft = screen.screenToDipPoint({ x: raw.x, y: raw.y })
+  const bottomRight = screen.screenToDipPoint({ x: raw.x + raw.width, y: raw.y + raw.height })
+  const fg = {
+    x: topLeft.x,
+    y: topLeft.y,
+    width: bottomRight.x - topLeft.x,
+    height: bottomRight.y - topLeft.y,
+  }
+
   const current = mainWindow.getBounds()
   // If the "foreground window" is just us, there's nothing to dock against.
   if (Math.abs(fg.x - current.x) < 5 && Math.abs(fg.y - current.y) < 5) return
