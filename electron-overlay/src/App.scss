@@ -135,6 +135,15 @@
     color: $color-text-muted;
   }
 
+  .header-id {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: monospace;
+    font-size: $font-size-sm;
+  }
+
   .minimize-button,
   .close-button {
     -webkit-app-region: no-drag;
@@ -248,12 +257,24 @@
 }
 
 .username-prompt {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   padding: $spacing-xl;
   flex: 1;
+
+  .app-version {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: $spacing-md;
+    text-align: center;
+    color: $color-text-subtle;
+    font-size: $font-size-xs;
+    font-family: monospace;
+  }
 
   h3 {
     margin: 0 0 $spacing-lg 0;

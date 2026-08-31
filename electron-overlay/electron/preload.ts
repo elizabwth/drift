@@ -16,4 +16,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.on(channel, (event, ...args) => callback(...args))
     }
   },
+  getVersion: () => ipcRenderer.invoke('get-app-version'),
 })

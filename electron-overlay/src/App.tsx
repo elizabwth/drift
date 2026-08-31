@@ -13,14 +13,20 @@ function App() {
   const [inputValue, setInputValue] = useState('')
   const [isHovered, setIsHovered] = useState(false)
   const [isMinimized, setIsMinimized] = useState(false)
-  const [username, setUsername] = useState<string | null>(() =>
-    localStorage.getItem('drift-username')
-  )
-  const [usernameInput, setUsernameInput] = useState('')
+  // Room ID and username are decoupled: the room ID is what actually
+  // determines the P2P connection identity (what a friend types into
+  // "connect" to reach you), while username is purely a display name on
+  // messages. Both are remembered, but the join screen always shows on
+  // launch (pre-filled) rather than skipping straight to the last room.
+  const [username, setUsername] = useState<string | null>(null)
+  const [roomId, setRoomId] = useState<string | null>(null)
+  const [usernameInput, setUsernameInput] = useState(() => localStorage.getItem('drift-username') || '')
+  const [roomIdInput, setRoomIdInput] = useState(() => localStorage.getItem('drift-room-id') || '')
   const [myPeerId, setMyPeerId] = useState<string>('')
   const [connectToPeerId, setConnectToPeerId] = useState('')
   const [connectedPeers, setConnectedPeers] = useState<DataConnection[]>([])
   const [connectStatus, setConnectStatus] = useState<{ type: 'connecting' | 'success' | 'error'; message: string } | null>(null)
+  const [appVersion, setAppVersion] = useState('')
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const peerRef = useRef<Peer | null>(null)
@@ -77,12 +83,13 @@ function App() {
     </>
   )
 
-  // Initialize PeerJS. The peer ID is derived from the username instead of
+  // Initialize PeerJS. The peer ID is derived from the room ID instead of
   // PeerJS's default random UUID, so it's short and something the user
-  // effectively "set" themselves (via their username) rather than a
-  // cryptic ID they'd have to copy/paste around.
+  // effectively "set" themselves rather than a cryptic ID they'd have to
+  // copy/paste around. This is deliberately independent of the username -
+  // the room ID is the connection address, the username is just a label.
   useEffect(() => {
-    if (!username) return
+    if (!roomId) return
 
     const slugify = (s: string) =>
       s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
@@ -135,13 +142,13 @@ function App() {
       })
     }
 
-    connect(slugify(username) || 'drift-user')
+    connect(slugify(roomId) || 'drift-room')
 
     return () => {
       destroyed = true
       peer?.destroy()
     }
-  }, [username])
+  }, [roomId])
 
   const setupConnection = (conn: DataConnection) => {
     conn.on('open', () => {
@@ -218,11 +225,14 @@ function App() {
     setInputValue('')
   }
 
-  const handleSetUsername = () => {
-    if (usernameInput.trim()) {
-      localStorage.setItem('drift-username', usernameInput.trim())
-      setUsername(usernameInput.trim())
-    }
+  const handleJoin = () => {
+    const nextUsername = usernameInput.trim()
+    const nextRoomId = roomIdInput.trim()
+    if (!nextUsername || !nextRoomId) return
+    localStorage.setItem('drift-username', nextUsername)
+    localStorage.setItem('drift-room-id', nextRoomId)
+    setUsername(nextUsername)
+    setRoomId(nextRoomId)
   }
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -231,9 +241,9 @@ function App() {
     }
   }
 
-  const handleUsernameKeyPress = (e: React.KeyboardEvent) => {
+  const handleJoinKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
-      handleSetUsername()
+      handleJoin()
     }
   }
 
@@ -266,6 +276,10 @@ function App() {
     scrollToBottom()
   }, [messages])
 
+  useEffect(() => {
+    window.electronAPI?.getVersion().then(setAppVersion)
+  }, [])
+
   if (isMinimized) {
     return (
       <div className="app-shell">
@@ -277,8 +291,10 @@ function App() {
     )
   }
 
-  // Username prompt
-  if (!username) {
+  // Join screen - always shown on launch, pre-filled with whatever room ID
+  // and username were used last time, so returning is a single click but
+  // switching rooms/identities is always just as visible an option.
+  if (!username || !roomId) {
     return (
       <div className="app-shell">
         <div
@@ -293,16 +309,24 @@ function App() {
             <button className="close-button" onClick={handleClose}>×</button>
           </div>
           <div className="username-prompt">
-            <h3>Enter your username</h3>
+            <h3>Join a room</h3>
+            <input
+              type="text"
+              value={roomIdInput}
+              onChange={(e) => setRoomIdInput(e.target.value)}
+              onKeyPress={handleJoinKeyPress}
+              placeholder="Room ID..."
+              autoFocus
+            />
             <input
               type="text"
               value={usernameInput}
               onChange={(e) => setUsernameInput(e.target.value)}
-              onKeyPress={handleUsernameKeyPress}
+              onKeyPress={handleJoinKeyPress}
               placeholder="Username..."
-              autoFocus
             />
-            <button onClick={handleSetUsername}>Join</button>
+            <button onClick={handleJoin}>Join</button>
+            {appVersion && <div className="app-version">v{appVersion}</div>}
           </div>
         </div>
         {resizeHandles}
@@ -319,7 +343,7 @@ function App() {
         style={containerStyle}
       >
         <div className="chat-header">
-          <h2>Drift</h2>
+          <h2 className="header-id" title={myPeerId}>{myPeerId || 'Drift'}</h2>
           <div className="connection-status">
             <span className={`status-dot ${connectedPeers.length > 0 ? 'connected' : 'disconnected'}`} />
             <span className="peer-count">{connectedPeers.length}</span>
@@ -330,7 +354,7 @@ function App() {
 
         <div className="connection-controls">
           <div className="my-peer-id">
-            <small>Your ID:</small>
+            <small>Room ID:</small>
             <input
               type="text"
               value={myPeerId}
@@ -348,7 +372,7 @@ function App() {
               value={connectToPeerId}
               onChange={(e) => setConnectToPeerId(e.target.value)}
               onKeyPress={handleConnectKeyPress}
-              placeholder="Paste peer ID to connect..."
+              placeholder="Paste room ID to connect..."
             />
             <button onClick={handleConnectToPeer}>Connect</button>
           </div>

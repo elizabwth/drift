@@ -43,6 +43,8 @@ function saveWindowState(bounds: WindowState) {
   }
 }
 
+ipcMain.handle('get-app-version', () => app.getVersion())
+
 let mainWindow: BrowserWindow | null = null
 // The window's bounds while NOT shrunk to the corner bubble - this is what
 // gets persisted and what "restore" snaps back to, so minimizing never
