@@ -125,7 +125,8 @@ function App() {
       peer = createPeer(`${roomSlug}-${Math.floor(1000 + Math.random() * 9000)}`)
       peerRef.current = peer
 
-      peer.on('open', () => {
+      peer.on('open', (guestId) => {
+        console.log('Registered as guest', guestId, '- connecting to host', roomSlug)
         setConnectStatus({ type: 'connecting', message: `Joining ${roomId}...` })
         if (connectTimeoutRef.current) window.clearTimeout(connectTimeoutRef.current)
         connectTimeoutRef.current = window.setTimeout(() => {
@@ -138,6 +139,7 @@ function App() {
 
       peer.on('error', (err) => {
         if (err.type === 'peer-unavailable') {
+          console.error('Host not reachable:', err)
           if (connectTimeoutRef.current) {
             window.clearTimeout(connectTimeoutRef.current)
             connectTimeoutRef.current = null
@@ -152,12 +154,18 @@ function App() {
     peer = createPeer(roomSlug)
     peerRef.current = peer
 
+    peer.on('open', (id) => {
+      console.log('Registered as host', id, '- waiting for connections')
+    })
+
     peer.on('connection', (conn) => {
+      console.log('Incoming connection from', conn.peer)
       setupConnection(conn)
     })
 
     peer.on('error', (err) => {
       if (err.type === 'unavailable-id' && !destroyed) {
+        console.log('Room already taken, joining as guest instead')
         peer.destroy()
         joinAsGuest()
         return
@@ -205,6 +213,20 @@ function App() {
         connectTimeoutRef.current = null
       }
       setConnectStatus({ type: 'error', message: 'Connection failed' })
+    })
+
+    // Surfaces the actual WebRTC negotiation state instead of only ever
+    // seeing a generic 10s timeout - lets us tell a real NAT/ICE failure
+    // apart from the signaling side never reaching the other person at all.
+    conn.on('iceStateChanged', (state) => {
+      console.log('ICE state for', conn.peer, ':', state)
+      if (state === 'failed' || state === 'disconnected') {
+        if (connectTimeoutRef.current) {
+          window.clearTimeout(connectTimeoutRef.current)
+          connectTimeoutRef.current = null
+        }
+        setConnectStatus({ type: 'error', message: `Network connection failed (${state})` })
+      }
     })
   }
 
