@@ -8,6 +8,30 @@ interface ChatMessage {
   timestamp: number
 }
 
+// A short synthesized blip (no audio asset needed) - a quick rising square
+// wave, like a retro game UI beep (RollerCoaster Tycoon click / Borderlands
+// skill point).
+const playBleep = (startFreq: number, endFreq: number) => {
+  try {
+    const ctx = new AudioContext()
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+    osc.type = 'square'
+    osc.frequency.setValueAtTime(startFreq, ctx.currentTime)
+    osc.frequency.exponentialRampToValueAtTime(endFreq, ctx.currentTime + 0.08)
+    gain.gain.setValueAtTime(0.12, ctx.currentTime)
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12)
+    osc.connect(gain)
+    gain.connect(ctx.destination)
+    osc.start()
+    osc.stop(ctx.currentTime + 0.12)
+    osc.onended = () => ctx.close()
+  } catch {
+    // Audio isn't essential - silently skip if the browser blocks it
+    // (e.g. no user gesture yet) or AudioContext is unavailable.
+  }
+}
+
 function App() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [inputValue, setInputValue] = useState('')
@@ -198,6 +222,7 @@ function App() {
     conn.on('data', (data) => {
       const msg = data as ChatMessage
       setMessages((prev) => [...prev, msg])
+      playBleep(660, 440)
     })
 
     conn.on('close', () => {
@@ -247,6 +272,7 @@ function App() {
       conn.send(msg)
     })
 
+    playBleep(880, 1320)
     setInputValue('')
   }
 
@@ -302,6 +328,29 @@ function App() {
   useEffect(() => {
     window.electronAPI?.getVersion().then(setAppVersion)
   }, [])
+
+  // Restore this room's chat history from a prior session as soon as we
+  // join it, so reopening the app doesn't lose the conversation.
+  useEffect(() => {
+    if (!roomId) return
+    try {
+      const cached = localStorage.getItem(`drift-chat-${roomId}`)
+      setMessages(cached ? JSON.parse(cached) : [])
+    } catch {
+      setMessages([])
+    }
+  }, [roomId])
+
+  // Keep the cache for the current room up to date. Capped so a
+  // long-running chat doesn't grow localStorage without bound.
+  useEffect(() => {
+    if (!roomId) return
+    try {
+      localStorage.setItem(`drift-chat-${roomId}`, JSON.stringify(messages.slice(-200)))
+    } catch {
+      // Storage full or unavailable - chat still works, just won't persist.
+    }
+  }, [messages, roomId])
 
   if (isMinimized) {
     return (
