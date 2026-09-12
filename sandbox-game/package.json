@@ -1,0 +1,7 @@
+{
+  "name": "drift-sandbox-game",
+  "version": "1.0.0",
+  "description": "A fake 'game' window with no built-in chat, for testing Drift against something other than the desktop.",
+  "main": "main.js",
+  "private": true
+}

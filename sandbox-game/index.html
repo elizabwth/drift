@@ -1,0 +1,142 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Sandbox Game</title>
+<style>
+  html, body { margin: 0; padding: 0; overflow: hidden; background: #0a1426; }
+  canvas { display: block; }
+  #hud {
+    position: fixed;
+    top: 12px; left: 12px;
+    font: 13px/1.5 -apple-system, "Segoe UI", sans-serif;
+    color: rgba(255,255,255,0.85);
+    text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+    pointer-events: none;
+    user-select: none;
+  }
+  #hud b { color: #fff; }
+  #instructions {
+    position: fixed;
+    bottom: 16px; left: 50%;
+    transform: translateX(-50%);
+    font: 13px/1.6 -apple-system, "Segoe UI", sans-serif;
+    color: rgba(255,255,255,0.75);
+    text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+    text-align: center;
+    pointer-events: none;
+    user-select: none;
+  }
+  #instructions .row { display: block; }
+  #instructions kbd {
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.25);
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-family: inherit;
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud">SANDBOX GAME &mdash; no built-in text chat<br>Score: <b id="score">0</b> &nbsp;|&nbsp; FPS: <b id="fps">--</b></div>
+<div id="instructions">
+  <span class="row">This window has no chat of its own &mdash; that's the point. Use it to test Drift against.</span>
+  <span class="row"><kbd>Ctrl+Alt+D</kbd> toggle Drift &nbsp; <kbd>Ctrl+Alt+C</kbd> open chat &nbsp; <kbd>F11</kbd> real fullscreen (hardest case for an overlay)</span>
+</div>
+<script>
+const canvas = document.getElementById('c')
+const ctx = canvas.getContext('2d')
+let W, H
+function resize() {
+  W = canvas.width = window.innerWidth
+  H = canvas.height = window.innerHeight
+}
+resize()
+window.addEventListener('resize', resize)
+
+// Starfield, drifting slowly - gives the scene a base layer of motion even
+// away from the balls, so overlay blur/blend can be checked against a calm
+// area too, not just the busy foreground.
+const STAR_COUNT = 140
+const stars = Array.from({ length: STAR_COUNT }, () => ({
+  x: Math.random(),
+  y: Math.random(),
+  r: Math.random() * 1.6 + 0.4,
+  speed: Math.random() * 0.00006 + 0.00001,
+  phase: Math.random() * Math.PI * 2,
+}))
+
+// Bouncing colored balls - real continuous motion + color variety, good
+// stand-in for "actual game content" behind Drift's overlay.
+const COLORS = ['#ff6b6b', '#4ecdc4', '#ffd93d', '#a78bfa', '#5eead4', '#f472b6']
+const BALL_COUNT = 14
+let balls = []
+function spawnBalls() {
+  balls = Array.from({ length: BALL_COUNT }, (_, i) => ({
+    x: Math.random() * W,
+    y: Math.random() * H,
+    r: 14 + Math.random() * 22,
+    vx: (Math.random() - 0.5) * 260,
+    vy: (Math.random() - 0.5) * 260,
+    color: COLORS[i % COLORS.length],
+  }))
+}
+spawnBalls()
+window.addEventListener('resize', () => {
+  balls.forEach(b => { b.x = Math.min(b.x, W - b.r); b.y = Math.min(b.y, H - b.r) })
+})
+
+let score = 0
+let lastFrame = performance.now()
+let fpsAccum = 0, fpsFrames = 0, fpsLast = performance.now()
+
+function step(now) {
+  const dt = Math.min((now - lastFrame) / 1000, 0.05)
+  lastFrame = now
+
+  ctx.fillStyle = '#0a1426'
+  ctx.fillRect(0, 0, W, H)
+
+  for (const s of stars) {
+    s.phase += s.speed * 1000 * dt
+    const tw = 0.5 + 0.5 * Math.sin(s.phase * 6)
+    ctx.fillStyle = `rgba(255,255,255,${(0.3 + 0.5 * tw).toFixed(2)})`
+    ctx.beginPath()
+    ctx.arc(s.x * W, s.y * H, s.r, 0, Math.PI * 2)
+    ctx.fill()
+  }
+
+  for (const b of balls) {
+    b.x += b.vx * dt
+    b.y += b.vy * dt
+    if (b.x - b.r < 0) { b.x = b.r; b.vx *= -1; score++ }
+    if (b.x + b.r > W) { b.x = W - b.r; b.vx *= -1; score++ }
+    if (b.y - b.r < 0) { b.y = b.r; b.vy *= -1; score++ }
+    if (b.y + b.r > H) { b.y = H - b.r; b.vy *= -1; score++ }
+
+    const grad = ctx.createRadialGradient(b.x, b.y, b.r * 0.1, b.x, b.y, b.r)
+    grad.addColorStop(0, '#ffffff')
+    grad.addColorStop(0.25, b.color)
+    grad.addColorStop(1, b.color + '55')
+    ctx.fillStyle = grad
+    ctx.beginPath()
+    ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2)
+    ctx.fill()
+  }
+
+  document.getElementById('score').textContent = score
+
+  fpsFrames++
+  if (now - fpsLast > 500) {
+    document.getElementById('fps').textContent = Math.round((fpsFrames * 1000) / (now - fpsLast))
+    fpsFrames = 0
+    fpsLast = now
+  }
+
+  requestAnimationFrame(step)
+}
+requestAnimationFrame(step)
+</script>
+</body>
+</html>

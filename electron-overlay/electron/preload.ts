@@ -5,16 +5,18 @@ import { contextBridge, ipcRenderer } from 'electron'
 contextBridge.exposeInMainWorld('electronAPI', {
   send: (channel: string, data?: any) => {
     // Whitelist channels
-    const validChannels = ['message-sent', 'toggle-overlay', 'close-window', 'resize-delta', 'toggle-minimize']
+    const validChannels = ['message-sent', 'toggle-overlay', 'close-window', 'resize-delta', 'toggle-minimize', 'set-ignore-mouse-events', 'set-overlay-zone']
     if (validChannels.includes(channel)) {
       ipcRenderer.send(channel, data)
     }
   },
   on: (channel: string, callback: Function) => {
-    const validChannels = ['message-received', 'overlay-toggled']
+    const validChannels = ['message-received', 'overlay-toggled', 'shortcut-toggle-overlay', 'shortcut-open-chat', 'overlay-zone-changed']
     if (validChannels.includes(channel)) {
       ipcRenderer.on(channel, (event, ...args) => callback(...args))
     }
   },
-  getVersion: () => ipcRenderer.invoke('get-app-version'),
+  getShortcuts: () => ipcRenderer.invoke('get-shortcuts'),
+  setShortcut: (key: string, accelerator: string) => ipcRenderer.invoke('set-shortcut', { key, accelerator }),
+  getOverlayZone: () => ipcRenderer.invoke('get-overlay-zone'),
 })

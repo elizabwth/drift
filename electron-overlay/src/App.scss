@@ -16,7 +16,35 @@
   overflow: hidden;
   border-radius: $radius-lg;
   border: 1px solid $color-border-strong;
-  transition: opacity $transition-smooth;
+  transition: opacity $transition-smooth, background-color $transition-smooth, border-color $transition-smooth;
+
+  // Idle-fade for the chat view specifically: the panel chrome (header,
+  // room bar, input, connect status) fades away entirely, but message
+  // bubbles are excluded so the conversation stays readable the whole
+  // time - like a game's own chat overlay, not a window that dims. Applied
+  // via a class rather than the whole-container opacity join/settings use,
+  // since fading .message too would defeat the point.
+  &.idle {
+    background-color: transparent;
+    border-color: transparent;
+
+    .chat-header,
+    .room-bar,
+    .connect-status,
+    .chat-input,
+    .jump-to-bottom {
+      opacity: 0;
+      pointer-events: none;
+    }
+  }
+
+  .chat-header,
+  .room-bar,
+  .connect-status,
+  .chat-input,
+  .jump-to-bottom {
+    transition: opacity $transition-smooth;
+  }
 }
 
 .app-container-mini {
@@ -47,6 +75,38 @@
 
     &.disconnected {
       background-color: #ef4444;
+    }
+  }
+
+  .mini-hold-ring {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    // Rotated so the fill starts at 12 o'clock instead of the SVG default
+    // of 3 o'clock - reads more like a timer.
+    transform: rotate(-90deg);
+    pointer-events: none;
+
+    circle {
+      fill: none;
+      stroke-width: 3;
+    }
+
+    .mini-hold-ring-track {
+      stroke: $color-border-strong;
+    }
+
+    .mini-hold-ring-progress {
+      stroke: #4ade80;
+      stroke-linecap: round;
+      // Snaps back quickly if the mouse leaves early; the 2s hold-open
+      // duration is set on .holding below, which wins while it's applied.
+      transition: stroke-dashoffset 0.25s ease-out;
+
+      &.holding {
+        transition: stroke-dashoffset 2s linear;
+      }
     }
   }
 }
@@ -135,9 +195,10 @@
     color: $color-text-muted;
   }
 
+  .leave-button,
   .minimize-button,
   .close-button,
-  .volume-button {
+  .settings-button {
     -webkit-app-region: no-drag;
     background: transparent;
     border: none;
@@ -162,29 +223,161 @@
     }
   }
 
-  .volume-control {
-    position: relative;
-    -webkit-app-region: no-drag;
+}
+
+.settings-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: $spacing-lg;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-md;
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-md;
+
+  label {
+    font-size: $font-size-sm;
+    color: $color-text-muted;
   }
 
-  .volume-popover {
-    position: absolute;
-    top: 100%;
-    right: 0;
-    margin-top: $spacing-xs;
-    padding: $spacing-sm;
-    background: $color-bg-light;
-    border: 1px solid $color-border;
-    border-radius: $radius-sm;
-    z-index: 1;
+  input[type='checkbox'] {
+    accent-color: $color-border-focus;
+    cursor: pointer;
+    width: 16px;
+    height: 16px;
+  }
+}
 
-    input[type='range'] {
-      width: 90px;
-      accent-color: $color-border-focus;
-      cursor: pointer;
+.settings-row-slider {
+  input[type='range'] {
+    width: 120px;
+    accent-color: $color-border-focus;
+    cursor: pointer;
+  }
+}
+
+.settings-row-position {
+  align-items: flex-start;
+}
+
+.position-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 22px);
+  grid-template-rows: repeat(3, 22px);
+  gap: 4px;
+}
+
+.position-cell {
+  width: 22px;
+  height: 22px;
+  border-radius: $radius-sm;
+  border: 1px solid $color-border;
+  background: $color-bg-button;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color $transition-fast, border-color $transition-fast;
+
+  &:hover {
+    background: $color-bg-button-hover;
+  }
+
+  &.active {
+    background: $color-border-focus;
+    border-color: $color-text;
+  }
+}
+
+.position-cell-free {
+  border-style: dashed;
+}
+
+.position-cell-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: $color-text-subtle;
+
+  .position-cell.active & {
+    background: $color-text;
+  }
+}
+
+.settings-tone-picker {
+  display: flex;
+  align-items: center;
+  gap: $spacing-sm;
+
+  select {
+    background: $color-bg-button;
+    border: 1px solid $color-border;
+    color: $color-text;
+    font-size: $font-size-sm;
+    padding: $spacing-xs $spacing-sm;
+    border-radius: $radius-sm;
+    cursor: pointer;
+
+    &:hover {
+      background: $color-bg-button-hover;
     }
   }
+}
 
+.settings-action-button {
+  background: $color-bg-button;
+  border: 1px solid $color-border;
+  color: $color-text;
+  font-size: $font-size-sm;
+  padding: $spacing-xs $spacing-sm;
+  border-radius: $radius-sm;
+  cursor: pointer;
+  transition: background-color $transition-fast;
+
+  &:hover {
+    background: $color-bg-button-hover;
+  }
+
+  &:active {
+    background: $color-bg-button-active;
+  }
+}
+
+.shortcut-value {
+  font-family: 'Courier New', monospace;
+  font-size: $font-size-sm;
+}
+
+.settings-divider {
+  margin-top: $spacing-sm;
+  padding-top: $spacing-md;
+  border-top: 1px solid $color-border;
+  font-size: $font-size-sm;
+  color: $color-text-subtle;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.settings-row-shortcut {
+  flex-wrap: wrap;
+}
+
+.shortcut-recording {
+  font-size: $font-size-sm;
+  color: $color-border-focus;
+  font-style: italic;
+}
+
+.shortcut-error {
+  width: 100%;
+  font-size: $font-size-sm;
+  color: #ef4444;
+  text-align: right;
 }
 
 .room-bar {
@@ -212,23 +405,55 @@
   }
 }
 
+.chat-messages-wrapper {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
 .chat-messages {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: $spacing-md;
   display: flex;
   flex-direction: column;
   gap: $spacing-xs;
 
+  // Bug found 2026-09-12 ("i can't see the damn window lol"): on a fresh
+  // join with zero messages, idle-fade removes every other visible thing
+  // (chrome, border, panel background) and this plain text was the ONLY
+  // thing left - no background of its own, nowhere near enough contrast to
+  // actually spot against a bright/busy game behind it. Real .message
+  // bubbles survive idle-fade fine because they carry their own
+  // background+blur (see .message below) - this needs the exact same
+  // treatment so the window is always findable, not just once there's a
+  // real message to anchor it.
   .no-messages {
     color: $color-text-subtle;
     text-align: center;
     margin-top: $spacing-xl;
     font-size: $font-size-sm;
+    background: rgba(20, 24, 32, 0.4);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: $radius-md;
+    padding: $spacing-sm $spacing-md;
   }
 
   .message {
-    background: $color-bg-light;
+    // A frosted-glass bubble rather than a flat dark box - blurs whatever
+    // it's sitting over (the game) rather than just tinting it, which
+    // keeps text legible without looking like a solid panel got left
+    // behind once everything else has faded away (see .app-container.idle
+    // - this is the only thing giving each line contrast at that point,
+    // so it can't rely on the panel's own background).
+    background: rgba(20, 24, 32, 0.4);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     padding: $spacing-sm $spacing-md;
     border-radius: $radius-md;
     word-wrap: break-word;
@@ -237,6 +462,91 @@
     &.message-animate {
       animation: slideInFade $transition-normal;
     }
+
+    // Wishlist #06 - a brief glow pulse on a message as it arrives, on top
+    // of (not instead of) the slide-in above; the two animations run
+    // together since they're on separate properties (box-shadow vs
+    // opacity/transform).
+    &.message-glow {
+      animation: messageGlowPulse 1.4s ease-out;
+    }
+  }
+
+  .message-link {
+    color: #93c5fd;
+    text-decoration: underline;
+    word-break: break-all;
+
+    &:hover {
+      color: #bfdbfe;
+    }
+  }
+
+  .message-media {
+    margin-top: $spacing-sm;
+    border-radius: $radius-md;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+
+    img,
+    video {
+      display: block;
+      max-width: 100%;
+      max-height: 220px;
+      border-radius: $radius-md;
+    }
+
+    &.message-media-youtube {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+
+      iframe {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        border: none;
+      }
+    }
+  }
+}
+
+@keyframes messageGlowPulse {
+  0% {
+    box-shadow: 0 0 0 1px rgba(129, 140, 248, 0.6), 0 0 16px 2px rgba(129, 140, 248, 0.45);
+  }
+  100% {
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08), 0 0 0 0 rgba(129, 140, 248, 0);
+  }
+}
+
+.jump-to-bottom {
+  position: absolute;
+  bottom: $spacing-sm;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid $color-border-strong;
+  background: $color-bg-button;
+  color: $color-text;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  animation: slideInFade $transition-normal;
+  transition: background-color $transition-fast;
+
+  &:hover {
+    background: $color-bg-button-hover;
+  }
+
+  &:active {
+    background: $color-bg-button-active;
   }
 }
 

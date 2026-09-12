@@ -1,6 +1,6 @@
 {
   "name": "electron-overlay-chat",
-  "version": "0.1.18",
+  "version": "0.1.34",
   "description": "An overlay chat app for games without in-game text chat",
   "author": "Elizabeth",
   "main": "dist-electron/main.js",
@@ -12,7 +12,8 @@
     "preview": "vite preview",
     "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\"",
     "electron:dev:windows": ".\\dev-windows.bat",
-    "electron:build": "tsc && vite build && electron-builder"
+    "electron:build": "tsc && vite build && electron-builder",
+    "sandbox": "electron ../sandbox-game"
   },
   "dependencies": {
     "electron-updater": "^6.8.9",
@@ -56,6 +57,9 @@
         "portable"
       ]
     },
+    "electronLanguages": [
+      "en-US"
+    ],
     "nsis": {
       "oneClick": false,
       "perMachine": false,
