@@ -7,6 +7,24 @@ import { fileURLToPath } from 'url'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
+// 2026-09-18: `build/icon.png` was never actually bundled into a packaged
+// build - electron-builder's `files` config only ships dist/dist-electron,
+// and `build/` is normally just build-TIME input (the installer/exe icon),
+// not a runtime resource. Every `path.join(__dirname, '../build/icon.png')`
+// call silently resolved to a nonexistent path once packaged, and
+// nativeImage.createFromPath() returns an empty image rather than
+// throwing - which is why the tray icon (and, unnoticed until skipTaskbar
+// hid it, the window icon) went missing specifically in a real installed/
+// auto-updated build, never in dev. Fixed two ways together: an
+// `extraResources` entry in package.json now actually copies icon.png into
+// the packaged resources folder, and this resolves to the right path in
+// both dev (relative to source) and packaged (resourcesPath) builds.
+function getIconPath(): string {
+  return app.isPackaged
+    ? path.join(process.resourcesPath, 'icon.png')
+    : path.join(__dirname, '../build/icon.png')
+}
+
 // A stray second launch (e.g. re-running the dev script before confirming
 // the first attempt actually failed) used to run alongside the first with
 // no warning - globalShortcut.register() fails *silently* on a conflict,
@@ -374,7 +392,7 @@ function createWindow() {
     // Lives in the tray now (2026-09-18 rework) - Settings and Close are
     // both reached from there, not a taskbar icon.
     skipTaskbar: true,
-    icon: path.join(__dirname, '../build/icon.png'),
+    icon: getIconPath(),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
@@ -610,7 +628,7 @@ function createSettingsWindow() {
     minHeight: 480,
     title: 'Drift Settings',
     backgroundColor: '#121620',
-    icon: path.join(__dirname, '../build/icon.png'),
+    icon: getIconPath(),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
@@ -632,7 +650,7 @@ function createSettingsWindow() {
 let tray: Tray | null = null
 
 function createTray() {
-  const trayIcon = nativeImage.createFromPath(path.join(__dirname, '../build/icon.png')).resize({ width: 16, height: 16 })
+  const trayIcon = nativeImage.createFromPath(getIconPath()).resize({ width: 16, height: 16 })
   tray = new Tray(trayIcon)
   tray.setToolTip('Drift')
   tray.setContextMenu(Menu.buildFromTemplate([

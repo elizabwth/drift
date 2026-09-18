@@ -1,6 +1,6 @@
 {
   "name": "electron-overlay-chat",
-  "version": "0.1.35",
+  "version": "0.1.36",
   "description": "An overlay chat app for games without in-game text chat",
   "author": "Elizabeth",
   "main": "dist-electron/main.js",
@@ -49,6 +49,9 @@
     "files": [
       "dist",
       "dist-electron"
+    ],
+    "extraResources": [
+      { "from": "build/icon.png", "to": "icon.png" }
     ],
     "win": {
       "icon": "build/icon.ico",
