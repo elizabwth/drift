@@ -177,6 +177,19 @@ function registerOneGlobalShortcut(key: (typeof GLOBAL_SHORTCUT_KEYS)[number]): 
   let ok: boolean
   try {
     ok = globalShortcut.register(shortcuts[key], () => {
+      // openChat's own chatInputRef.focus() (see App.tsx) only moves focus
+      // *within* the page - it does nothing for actual keystrokes if the
+      // BrowserWindow itself doesn't have real OS input focus, which
+      // disabling click-through does NOT grant on its own (the game
+      // underneath can keep it). 2026-09-18 ("f8 should continue to focus
+      // the chat input, even after it is not in focus"): grabbing OS focus
+      // here, before the DOM-level focus() even runs, is what makes a
+      // repeat press reliably work again after focus drifted back to the
+      // game in between.
+      if (key === 'openChat') {
+        mainWindow?.show()
+        mainWindow?.focus()
+      }
       mainWindow?.webContents.send(channel)
     })
   } catch {

@@ -551,9 +551,13 @@
   display: flex;
   gap: $spacing-sm;
   padding: $spacing-md;
-  background: $color-bg-darker;
-  border-top: 1px solid $color-border;
-  border-radius: 0 0 $radius-lg $radius-lg;
+  // No background/border of its own (2026-09-18: "the background around
+  // the input is visible") - when it pops alone (see showInput in
+  // App.tsx), a solid panel behind it looked like a floating box rather
+  // than a real game's minimal chat line. The <input> and Send button
+  // below already carry their own background/border, so this wrapper is
+  // just a transparent flex layout now.
+  background: transparent;
   // Hidden by default, independent of .app-container.idle above - shown
   // via the .visible modifier (see showInput in App.tsx) the instant chat
   // is engaged, with no hover required. This is what makes pressing the
