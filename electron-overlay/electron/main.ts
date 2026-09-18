@@ -345,6 +345,28 @@ function createWindow() {
   mainWindow.on('resize', persistBoundsDebounced)
   mainWindow.on('move', persistBoundsDebounced)
 
+  // "Add spacing above the taskbar in main mode" (2026-09-13): the mini
+  // bubble already only ever gets positioned via workArea math (see
+  // toggle-minimize below), so it never overlaps the taskbar - but the
+  // normal/main window only ever got clamped to workArea ONCE, at launch
+  // (clampToVisibleDisplay above). Nothing stopped a manual drag afterward
+  // from pulling it down behind the taskbar. This keeps it clamped
+  // continuously instead, on every drag tick, same idea as
+  // clampToVisibleDisplay but live rather than launch-only.
+  let isClampingToWorkArea = false
+  mainWindow.on('move', () => {
+    if (isMinimized || isClampingToWorkArea || !mainWindow) return
+    const bounds = mainWindow.getBounds()
+    const wa = screen.getDisplayNearestPoint(bounds).workArea
+    const x = Math.min(Math.max(bounds.x, wa.x), wa.x + wa.width - bounds.width)
+    const y = Math.min(Math.max(bounds.y, wa.y), wa.y + wa.height - bounds.height)
+    if (x !== bounds.x || y !== bounds.y) {
+      isClampingToWorkArea = true
+      mainWindow.setBounds({ x, y, width: bounds.width, height: bounds.height })
+      isClampingToWorkArea = false
+    }
+  })
+
   // Dragging the window manually always wins - a snap zone is a one-time
   // placement, not something that fights the user for control afterward.
   // isApplyingZone distinguishes our own applyOverlayZone() setBounds()
