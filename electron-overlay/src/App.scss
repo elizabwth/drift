@@ -30,6 +30,7 @@
   .chat-messages-wrapper,
   .chat-input,
   .username-prompt,
+  .home-settings-button,
   .resize-handle {
     -webkit-app-region: no-drag;
   }
@@ -227,8 +228,19 @@
   gap: $spacing-md;
 
   label {
+    display: flex;
+    align-items: center;
+    gap: $spacing-sm;
     font-size: $font-size-sm;
     color: $color-text-muted;
+
+    // Every settings-row label leads with one of the small line icons
+    // from Settings.tsx (SpeakerIcon/BellIcon/etc) - dimmed to match the
+    // label text rather than standing out at full brightness.
+    svg {
+      flex-shrink: 0;
+      color: $color-text-subtle;
+    }
   }
 
   input[type='checkbox'] {
@@ -324,6 +336,16 @@
   border-radius: $radius-sm;
   cursor: pointer;
   transition: background-color $transition-fast;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  // The tone-preview "Test" button is icon-only (PlayIcon in
+  // Settings.tsx) - a touch less horizontal padding reads right for a
+  // roughly-square icon button vs. one holding text.
+  &:has(svg:only-child) {
+    padding: $spacing-xs;
+  }
 
   &:hover {
     background: $color-bg-button-hover;
@@ -347,6 +369,9 @@
   color: $color-text-subtle;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  display: flex;
+  align-items: center;
+  gap: $spacing-sm;
 }
 
 .settings-row-shortcut {
@@ -606,6 +631,38 @@
     &:active {
       background: $color-bg-button-active;
     }
+  }
+}
+
+// The join/home screen's own way into Settings (2026-09-18) - the rest of
+// the app is title-bar-free and reaches Settings only via the tray, but
+// this screen has the room for a small corner affordance and it's the
+// screen "Home" (the tray item) actually returns to, so it's the natural
+// place for one. Positioned against .app-shell (the nearest positioned
+// ancestor - .app-container itself doesn't set its own position).
+.home-settings-button {
+  position: absolute;
+  top: $spacing-lg;
+  right: $spacing-lg;
+  z-index: 1;
+  background: transparent;
+  border: none;
+  color: $color-text-muted;
+  padding: $spacing-xs;
+  border-radius: $radius-md;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color $transition-fast, background-color $transition-fast;
+
+  &:hover {
+    color: $color-text;
+    background: $color-bg-light;
+  }
+
+  &:active {
+    color: $color-text-subtle;
   }
 }
 

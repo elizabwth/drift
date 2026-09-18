@@ -1,8 +1,79 @@
 import { useEffect, useState } from 'react'
+import type { ReactNode } from 'react'
 import './App.scss'
 import { keyEventToAccelerator } from './shortcutUtils'
 import { NOTIFICATION_TONES, DEFAULT_NOTIFICATION_TONE, playBleep } from './soundUtils'
 import { ZONE_GRID, ZONE_LABELS } from './overlayZones'
+
+// Small line-icon set matching the rest of Drift's chrome (the old
+// header's gear/home icons - see App.tsx) - same viewBox/stroke
+// conventions, just one per settings row now that this is a real page of
+// its own rather than a single icon-less list.
+function IconIndent({ children }: { children: ReactNode }) {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      {children}
+    </svg>
+  )
+}
+
+const SpeakerIcon = () => (
+  <IconIndent>
+    <path d="M11 5 6 9H2v6h4l5 4V5z" />
+    <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+  </IconIndent>
+)
+
+const VolumeBarsIcon = () => (
+  <IconIndent>
+    <rect x="4" y="14" width="3" height="6" />
+    <rect x="10.5" y="9" width="3" height="11" />
+    <rect x="17" y="4" width="3" height="16" />
+  </IconIndent>
+)
+
+const BellIcon = () => (
+  <IconIndent>
+    <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+    <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+  </IconIndent>
+)
+
+const TargetIcon = () => (
+  <IconIndent>
+    <circle cx="12" cy="12" r="8" />
+    <line x1="12" y1="2" x2="12" y2="6" />
+    <line x1="12" y1="18" x2="12" y2="22" />
+    <line x1="2" y1="12" x2="6" y2="12" />
+    <line x1="18" y1="12" x2="22" y2="12" />
+  </IconIndent>
+)
+
+const TrashIcon = () => (
+  <IconIndent>
+    <polyline points="3 6 5 6 21 6" />
+    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    <line x1="10" y1="11" x2="10" y2="17" />
+    <line x1="14" y1="11" x2="14" y2="17" />
+  </IconIndent>
+)
+
+const KeyboardIcon = () => (
+  <IconIndent>
+    <rect x="2" y="6" width="20" height="12" rx="2" ry="2" />
+    <line x1="6" y1="10" x2="6" y2="10.01" />
+    <line x1="10" y1="10" x2="10" y2="10.01" />
+    <line x1="14" y1="10" x2="14" y2="10.01" />
+    <line x1="18" y1="10" x2="18" y2="10.01" />
+    <line x1="6" y1="14" x2="18" y2="14" />
+  </IconIndent>
+)
+
+const PlayIcon = () => (
+  <IconIndent>
+    <polygon points="6 3 20 12 6 21 6 3" />
+  </IconIndent>
+)
 
 // This is a real, normal Electron window (native title bar/close/minimize
 // via the OS) rather than the chat overlay's frameless click-through one -
@@ -102,7 +173,7 @@ function Settings() {
     <div className="settings-page">
       <div className="settings-body">
         <div className="settings-row">
-          <label htmlFor="settings-sound">Message sounds</label>
+          <label htmlFor="settings-sound"><SpeakerIcon />Message sounds</label>
           <input
             id="settings-sound"
             type="checkbox"
@@ -112,7 +183,7 @@ function Settings() {
         </div>
 
         <div className="settings-row settings-row-slider">
-          <label htmlFor="settings-volume">Volume</label>
+          <label htmlFor="settings-volume"><VolumeBarsIcon />Volume</label>
           <input
             id="settings-volume"
             type="range"
@@ -124,7 +195,7 @@ function Settings() {
         </div>
 
         <div className="settings-row">
-          <label htmlFor="settings-tone">Notification sound</label>
+          <label htmlFor="settings-tone"><BellIcon />Notification sound</label>
           <div className="settings-tone-picker">
             <select
               id="settings-tone"
@@ -137,18 +208,19 @@ function Settings() {
             </select>
             <button
               className="settings-action-button"
+              title="Preview this tone"
               onClick={() => {
                 const tone = NOTIFICATION_TONES[notificationTone]
                 playBleep(tone.startFreq, tone.endFreq, volume || 50)
               }}
             >
-              Test
+              <PlayIcon />
             </button>
           </div>
         </div>
 
         <div className="settings-row settings-row-position">
-          <label>Overlay position</label>
+          <label><TargetIcon />Overlay position</label>
           <div className="position-grid">
             {ZONE_GRID.flat().map((zone, i) => (
               zone === null ? <span key={i} /> : (
@@ -166,11 +238,11 @@ function Settings() {
         </div>
 
         <div className="settings-row">
-          <label>Chat history</label>
+          <label><TrashIcon />Chat history</label>
           <button className="settings-action-button" onClick={handleClearHistory}>Clear</button>
         </div>
 
-        <div className="settings-divider">Keyboard shortcuts</div>
+        <div className="settings-divider"><KeyboardIcon />Keyboard shortcuts</div>
         {shortcutRows.map(({ key, label }) => (
           <div className="settings-row settings-row-shortcut" key={key}>
             <label>{label}</label>

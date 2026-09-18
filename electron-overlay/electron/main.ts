@@ -612,7 +612,8 @@ function createWindow() {
 // A real, normal window (native title bar, resizable, closable the usual
 // way) - unlike mainWindow, this isn't an overlay, so none of the
 // frameless/transparent/always-on-top/click-through machinery applies.
-// Opened on demand from the tray menu; reused (just focused) if already
+// Opened on demand from the tray menu, or from the join/home screen's own
+// gear icon (see 'open-settings' below) - reused (just focused) if already
 // open rather than creating a second one.
 function createSettingsWindow() {
   if (settingsWindow) {
@@ -646,6 +647,11 @@ function createSettingsWindow() {
     settingsWindow = null
   })
 }
+
+// The join/home screen has its own gear icon now (2026-09-18) so Settings
+// isn't tray-only - the chat view itself still has no way in, on purpose,
+// matching the rest of its title-bar-free design.
+ipcMain.on('open-settings', () => createSettingsWindow())
 
 let tray: Tray | null = null
 
