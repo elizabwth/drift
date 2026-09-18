@@ -19,11 +19,16 @@
   transition: opacity $transition-smooth, background-color $transition-smooth, border-color $transition-smooth;
 
   // Idle-fade for the chat view specifically: the panel chrome (header,
-  // room bar, input, connect status) fades away entirely, but message
-  // bubbles are excluded so the conversation stays readable the whole
-  // time - like a game's own chat overlay, not a window that dims. Applied
-  // via a class rather than the whole-container opacity join/settings use,
-  // since fading .message too would defeat the point.
+  // room bar, connect status) fades away entirely, but message bubbles are
+  // excluded so the conversation stays readable the whole time - like a
+  // game's own chat overlay, not a window that dims. Applied via a class
+  // rather than the whole-container opacity join/settings use, since
+  // fading .message too would defeat the point.
+  //
+  // .chat-input is deliberately NOT in this group (see its own rule
+  // below) - it has its own visibility, driven by showInput in App.tsx,
+  // so the hotkey alone can pop just the input line without dragging the
+  // rest of the panel open too.
   &.idle {
     background-color: transparent;
     border-color: transparent;
@@ -31,7 +36,6 @@
     .chat-header,
     .room-bar,
     .connect-status,
-    .chat-input,
     .jump-to-bottom {
       opacity: 0;
       pointer-events: none;
@@ -41,7 +45,6 @@
   .chat-header,
   .room-bar,
   .connect-status,
-  .chat-input,
   .jump-to-bottom {
     transition: opacity $transition-smooth;
   }
@@ -196,9 +199,7 @@
   }
 
   .leave-button,
-  .minimize-button,
-  .close-button,
-  .settings-button {
+  .minimize-button {
     -webkit-app-region: no-drag;
     background: transparent;
     border: none;
@@ -223,6 +224,19 @@
     }
   }
 
+}
+
+// Page shell for the standalone Settings window (see Settings.tsx) - a
+// normal, always-opaque window with native chrome, unlike .app-shell/
+// .app-container which are built for the frameless click-through overlay.
+.settings-page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: $color-bg-dark;
+  color: $color-text;
+  font-family: Arial, sans-serif;
+  overflow: hidden;
 }
 
 .settings-body {
@@ -568,6 +582,19 @@
   background: $color-bg-darker;
   border-top: 1px solid $color-border;
   border-radius: 0 0 $radius-lg $radius-lg;
+  // Hidden by default, independent of .app-container.idle above - shown
+  // via the .visible modifier (see showInput in App.tsx) the instant chat
+  // is engaged, with no hover required. This is what makes pressing the
+  // open-chat hotkey pop just a slim input line rather than the whole
+  // panel, matching a real game's chat box.
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity $transition-smooth;
+
+  &.visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
 
   input {
     flex: 1;

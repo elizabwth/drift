@@ -2,6 +2,8 @@ import { useState, useRef, useEffect } from 'react'
 import type { ReactNode } from 'react'
 import Peer, { DataConnection } from 'peerjs'
 import './App.scss'
+import { keyEventToAccelerator } from './shortcutUtils'
+import { NOTIFICATION_TONES, DEFAULT_NOTIFICATION_TONE, playBleep } from './soundUtils'
 
 interface ChatMessage {
   username: string
@@ -13,108 +15,6 @@ interface ChatMessage {
 // set on it below.
 const HOLD_RING_RADIUS = 21
 const HOLD_RING_CIRCUMFERENCE = 2 * Math.PI * HOLD_RING_RADIUS
-
-// Electron accelerator strings only, no Mac support needed - this app only
-// ships Windows builds, so there's no CommandOrControl ambiguity to handle.
-const SPECIAL_KEY_MAP: Record<string, string> = {
-  ' ': 'Space',
-  Escape: 'Escape',
-  Tab: 'Tab',
-  ArrowUp: 'Up',
-  ArrowDown: 'Down',
-  ArrowLeft: 'Left',
-  ArrowRight: 'Right',
-  Enter: 'Return',
-  Backspace: 'Backspace',
-  Delete: 'Delete',
-}
-
-// Used both to format a captured combo while recording a new shortcut and
-// to check an incoming keydown against a saved one (dismissInput's local
-// match) - sharing one function keeps those two always in agreement.
-function keyEventToAccelerator(e: KeyboardEvent): string | null {
-  const key = e.key
-  if (key === 'Control' || key === 'Alt' || key === 'Shift' || key === 'Meta') return null
-
-  let mainKey: string
-  if (SPECIAL_KEY_MAP[key]) {
-    mainKey = SPECIAL_KEY_MAP[key]
-  } else if (/^[a-zA-Z]$/.test(key)) {
-    mainKey = key.toUpperCase()
-  } else if (/^[0-9]$/.test(key)) {
-    mainKey = key
-  } else if (/^F(?:[1-9]|1[0-9]|2[0-4])$/.test(key)) {
-    mainKey = key
-  } else {
-    return null
-  }
-
-  const parts: string[] = []
-  if (e.ctrlKey) parts.push('Ctrl')
-  if (e.altKey) parts.push('Alt')
-  if (e.shiftKey) parts.push('Shift')
-  parts.push(mainKey)
-  return parts.join('+')
-}
-
-// Wishlist #06 ("custom notification sounds"): every tone is synthesized
-// (no audio asset to bundle/upload), so "custom" means picking a preset
-// frequency sweep rather than a fixed one - matches the existing
-// no-assets architecture instead of adding file storage for a Low-impact
-// item. The outgoing send tone stays fixed (660->440); only the incoming
-// notification tone is user-selectable.
-const NOTIFICATION_TONES: Record<string, { label: string; startFreq: number; endFreq: number }> = {
-  chime: { label: 'Chime', startFreq: 880, endFreq: 1320 },
-  pop: { label: 'Pop', startFreq: 1200, endFreq: 700 },
-  blip: { label: 'Blip', startFreq: 1046, endFreq: 1046 },
-  drop: { label: 'Drop', startFreq: 660, endFreq: 220 },
-}
-const DEFAULT_NOTIFICATION_TONE = 'chime'
-
-// 3x3 layout for the overlay-position picker in Settings - center cell is
-// 'free' (dragged-anywhere, the default), the other 8 are screen zones
-// computed in electron/main.ts.
-const ZONE_GRID: (OverlayZone | null)[][] = [
-  ['top-left', 'top', 'top-right'],
-  ['left', 'free', 'right'],
-  ['bottom-left', 'bottom', 'bottom-right'],
-]
-const ZONE_LABELS: Record<OverlayZone, string> = {
-  'top-left': 'Top left',
-  top: 'Top',
-  'top-right': 'Top right',
-  left: 'Left',
-  free: 'Free (drag anywhere)',
-  right: 'Right',
-  'bottom-left': 'Bottom left',
-  bottom: 'Bottom',
-  'bottom-right': 'Bottom right',
-}
-
-// A short synthesized blip (no audio asset needed) - a quick rising square
-// wave, like a retro game UI beep (RollerCoaster Tycoon click / Borderlands
-// skill point).
-const playBleep = (startFreq: number, endFreq: number, volume: number) => {
-  if (volume <= 0) return
-  try {
-    const ctx = new AudioContext()
-    const osc = ctx.createOscillator()
-    const gain = ctx.createGain()
-    osc.type = 'square'
-    osc.frequency.setValueAtTime(startFreq, ctx.currentTime)
-    osc.frequency.exponentialRampToValueAtTime(endFreq, ctx.currentTime + 0.08)
-    gain.gain.setValueAtTime(0.05 * (volume / 100), ctx.currentTime)
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12)
-    osc.connect(gain)
-    gain.connect(ctx.destination)
-    osc.start()
-    osc.stop(ctx.currentTime + 0.12)
-    osc.onended = () => ctx.close()
-  } catch {
-    // Audio isn't essential - silently skip if the browser blocks it
-    // (e.g. no user gesture yet) or AudioContext is unavailable.
-  }
-}
 
 // Wishlist #04 ("media sending support, embedded links to youtube/w.e"):
 // purely client-side link detection over the existing plain-text message
@@ -231,21 +131,18 @@ function App() {
     return saved !== null ? Number(saved) : 50
   })
   const [appVersion] = useState(__APP_VERSION__)
-  const [showSettings, setShowSettings] = useState(false)
   const [soundEnabled, setSoundEnabled] = useState(() => localStorage.getItem('drift-sound-enabled') !== 'false')
   const [notificationTone, setNotificationTone] = useState(() => {
     const saved = localStorage.getItem('drift-notification-tone')
     return saved && NOTIFICATION_TONES[saved] ? saved : DEFAULT_NOTIFICATION_TONE
   })
+  // Settings (sound/volume/tone, shortcut rebinding, overlay position, the
+  // gear icon itself) moved to its own standalone window in the 2026-09-18
+  // tray rework - see Settings.tsx. `shortcuts` stays here too since this
+  // window still reads it (the "no-messages" hint text, matching
+  // dismissInput's accelerator) - kept in sync via the 'shortcuts-updated'
+  // broadcast below rather than owning any editing UI.
   const [shortcuts, setShortcuts] = useState<Shortcuts | null>(null)
-  // Whether toggleOverlay/openChat's *current* saved accelerator is
-  // actually registered right now - register() fails silently on a
-  // conflict with something else already holding that combo, so without
-  // this Settings has no way to show "this is bound but not working."
-  const [shortcutStatus, setShortcutStatus] = useState<ShortcutStatus>({})
-  const [recordingShortcut, setRecordingShortcut] = useState<keyof Shortcuts | null>(null)
-  const [shortcutError, setShortcutError] = useState<keyof Shortcuts | null>(null)
-  const [overlayZone, setOverlayZone] = useState<OverlayZone>('free')
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
@@ -304,6 +201,25 @@ function App() {
     localStorage.setItem('drift-notification-tone', notificationTone)
   }, [notificationTone])
 
+  // Sound/volume/tone are edited in the standalone Settings window now
+  // (see Settings.tsx), a separate React tree with no shared state - the
+  // browser's native 'storage' event is what closes that gap: it fires
+  // here automatically whenever *another* window with the same origin
+  // changes a localStorage key (never in the window that made the change
+  // itself, which is exactly what's wanted - this window already updates
+  // its own state directly when it's the one editing something).
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'drift-volume' && e.newValue !== null) setVolume(Number(e.newValue))
+      if (e.key === 'drift-sound-enabled') setSoundEnabled(e.newValue !== 'false')
+      if (e.key === 'drift-notification-tone' && e.newValue && NOTIFICATION_TONES[e.newValue]) {
+        setNotificationTone(e.newValue)
+      }
+    }
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
+  }, [])
+
   // The same web bundle also runs standalone in a browser/WebView (e.g.
   // the Android build) - every window.electronAPI call is already
   // optional-chained so nothing breaks there, but the minimize/close
@@ -318,19 +234,34 @@ function App() {
   // (see isIdle below), and only its chrome, not the message bubbles.
   const isAttached = connectedPeers.length > 0
   // Message bubbles stay fully readable (like a game's own chat overlay)
-  // while the header/room-bar/input/panel chrome around them fades to
-  // nothing - see .app-container.idle. !isMouseActive forces this
+  // while the header/room-bar/jump-to-bottom/panel chrome around them
+  // fades to nothing - see .app-container.idle. !isMouseActive forces this
   // unconditionally (dismissed = definitely faded, and definitionally
-  // can't un-fade from hovering - see isMouseActive above); isInputFocused
-  // overrides it the other way - actively typing keeps the input box
-  // itself visible even if the mouse happens to be elsewhere.
+  // can't un-fade from hovering - see isMouseActive above).
   //
   // Used to also require isAttached (a peer actually connected) before
   // mouse-leave alone would fade the chrome - removed 2026-09-11 ("remove
   // the more than one person requirement"): fades on mouse-leave now even
   // solo/waiting for someone to join, not just once someone's actually in
   // the room.
-  const isIdle = !isInputFocused && (!isMouseActive || !isHovered)
+  //
+  // 2026-09-17 ("revealed in point-and-click games, annoying"): this used
+  // to also un-fade the instant isInputFocused went true, which happened
+  // right after every openChat press (onOpenChat focuses the input
+  // immediately) - so hitting the hotkey always popped the *entire* panel,
+  // not just something to type into. In a point-and-click game the cursor
+  // sweeps across the window constantly as part of normal play, so any
+  // hover after that point kept re-triggering the same full reveal. Now
+  // the full chrome only un-fades on a deliberate hover while chat is
+  // engaged; the input line itself is the thing that responds to the
+  // hotkey alone (see showInput below), like a real game's chat box.
+  const isIdle = !isMouseActive || !isHovered
+  // The input line's own visibility, independent of the rest of the
+  // chrome/isIdle above: it should appear the moment chat is engaged
+  // (hotkey pressed) with no hover required, so typing can start right
+  // away - and stay up while actively focused even if the mouse then
+  // leaves, so it doesn't vanish out from under text being typed.
+  const showInput = isMouseActive || isInputFocused
 
   // Solid background while solo/setting up so the panel reads as a real
   // window rather than a stray floating message list; once actually idle
@@ -361,8 +292,8 @@ function App() {
   useEffect(() => {
     if (!isElectron) return
     const inRoom = Boolean(username && roomId)
-    window.electronAPI?.send('set-ignore-mouse-events', inRoom && !isMinimized && !showSettings && !isMouseActive)
-  }, [isElectron, username, roomId, isMinimized, showSettings, isMouseActive])
+    window.electronAPI?.send('set-ignore-mouse-events', inRoom && !isMinimized && !isMouseActive)
+  }, [isElectron, username, roomId, isMinimized, isMouseActive])
 
   // The mini bubble doesn't wire up its own hover to isHovered, so without
   // this, hovering the minimize button then moving away would leave
@@ -684,12 +615,6 @@ function App() {
     }
   }
 
-  const handleClose = () => {
-    if (window.electronAPI) {
-      window.electronAPI.send('close-window')
-    }
-  }
-
   const handleCopyRoomId = () => {
     if (roomId) navigator.clipboard.writeText(roomId)
   }
@@ -731,11 +656,6 @@ function App() {
     } catch {
       // Storage unavailable - the in-memory clear above still took effect.
     }
-  }
-
-  const handleStartRecordingShortcut = (key: keyof Shortcuts) => {
-    setShortcutError(null)
-    setRecordingShortcut(key)
   }
 
   // How close to the bottom (px) still counts as "at the bottom" - a little
@@ -795,25 +715,17 @@ function App() {
   }, [])
 
   // Pull the saved bindings from main once at startup - only Electron has
-  // any concept of these (Android has no keyboard to shortcut).
+  // any concept of these (Android has no keyboard to shortcut). Rebinding
+  // itself now only happens in the standalone Settings window, which
+  // broadcasts 'shortcuts-updated' after a successful change so this
+  // window's own hint text/dismiss-key matching stays current.
   useEffect(() => {
     if (!isElectron) return
-    window.electronAPI?.getShortcuts().then(({ shortcuts, status }) => {
+    window.electronAPI?.getShortcuts().then(({ shortcuts }) => {
       setShortcuts(shortcuts)
-      setShortcutStatus(status)
     })
-  }, [isElectron])
-
-  // Overlay position preset (wishlist: "put it on the area where chat
-  // should be, configurable / snap to sides"). Loaded once from main, then
-  // kept live via 'overlay-zone-changed' - fires both when Settings picks a
-  // new zone and when the user drags the window manually (which drops it
-  // back to 'free' on the main-process side).
-  useEffect(() => {
-    if (!isElectron) return
-    window.electronAPI?.getOverlayZone().then(setOverlayZone)
-    const handler = (zone: OverlayZone) => setOverlayZone(zone)
-    window.electronAPI?.on('overlay-zone-changed', handler)
+    const handler = (updated: Shortcuts) => setShortcuts(updated)
+    window.electronAPI?.on('shortcuts-updated', handler)
   }, [isElectron])
 
   useEffect(() => {
@@ -847,8 +759,17 @@ function App() {
         chatInputRef.current?.focus()
       }
     }
+    const onDismissInput = () => {
+      chatInputRef.current?.blur()
+      setIsMouseActive(false)
+    }
     window.electronAPI?.on('shortcut-toggle-overlay', handleToggleMinimize)
     window.electronAPI?.on('shortcut-open-chat', onOpenChat)
+    window.electronAPI?.on('shortcut-dismiss-input', onDismissInput)
+    // Relayed from the Settings window's "Clear" button (see main.ts) -
+    // Settings has no way to reach this window's messages/roomId directly,
+    // being a completely separate window now.
+    window.electronAPI?.on('clear-chat-history', handleClearHistory)
   }, [isElectron])
 
   // Finishes the openChat shortcut's restore-then-focus sequence once the
@@ -860,15 +781,21 @@ function App() {
     }
   }, [isMinimized])
 
-  // dismissInput is intentionally local rather than a registered global
-  // shortcut (see electron/main.ts) - it only needs to fire while Drift's
-  // own window has focus, which is exactly when the chat is open anyway.
-  // It blurs the input, forces the idle-fade (chrome gone, messages still
-  // visible), and drops mouse interactivity (see isMouseActive) - all
-  // without minimizing. Settings is left alone entirely while open, only
-  // its own back button closes it.
+  // dismissInput is local (not a registered global shortcut) whenever this
+  // window actually has focus - cheap, zero IPC round-trip. It blurs the
+  // input, forces the idle-fade (chrome gone, messages still visible), and
+  // drops mouse interactivity (see isMouseActive) - all without
+  // minimizing.
+  //
+  // 2026-09-17 ("escape not working when drift is not focused"): this used
+  // to be the only path, on the assumption that chat being open meant
+  // Drift had focus - false in practice, since disabling click-through
+  // doesn't hand over OS keyboard focus from whatever game is still
+  // running underneath. See the set-chat-engaged effect below for the
+  // real-global-hotkey fallback that covers that case; this local listener
+  // stays too since it's instant whenever focus does happen to be here.
   useEffect(() => {
-    if (!username || !roomId || isMinimized || recordingShortcut || showSettings) return
+    if (!username || !roomId || isMinimized) return
     const dismissAccelerator = shortcuts?.dismissInput ?? 'Escape'
     const onKeyDown = (e: KeyboardEvent) => {
       if (keyEventToAccelerator(e) !== dismissAccelerator) return
@@ -878,7 +805,20 @@ function App() {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [username, roomId, isMinimized, recordingShortcut, shortcuts, showSettings])
+  }, [username, roomId, isMinimized, shortcuts])
+
+  // Tells the main process whether chat is actually engaged right now, so
+  // it can hold dismissInput as a real global hotkey for exactly that
+  // window (see applyDismissGlobalRegistration in main.ts) - the fallback
+  // for when Drift lacks OS focus and the local listener above can't see
+  // the keypress at all. Mirrors that listener's own guard conditions,
+  // plus isMouseActive itself: no reason to hold a global hook at all
+  // while chat isn't actually up.
+  useEffect(() => {
+    if (!isElectron) return
+    const engaged = Boolean(username && roomId) && !isMinimized && isMouseActive
+    window.electronAPI?.send('set-chat-engaged', engaged)
+  }, [isElectron, username, roomId, isMinimized, isMouseActive])
 
   // .chat-messages is the only scrollable region in this window - when
   // nothing has focus (e.g. right after dismissInput's blur(), or just
@@ -900,29 +840,6 @@ function App() {
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [])
-
-  // Captures the next keypress while rebinding a shortcut in Settings.
-  useEffect(() => {
-    if (!recordingShortcut) return
-    const key = recordingShortcut
-    const onKeyDown = async (e: KeyboardEvent) => {
-      e.preventDefault()
-      const accelerator = keyEventToAccelerator(e)
-      if (!accelerator) return // lone modifier or an unsupported key - keep waiting
-      setRecordingShortcut(null)
-      const result = await window.electronAPI?.setShortcut(key, accelerator)
-      if (result?.success) {
-        setShortcuts((prev) => (prev ? { ...prev, [key]: accelerator } : prev))
-        // A successful register() means it's now actually held - update
-        // optimistically rather than re-fetching from main.
-        setShortcutStatus((prev) => ({ ...prev, [key]: true }))
-      } else {
-        setShortcutError(key)
-      }
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [recordingShortcut])
 
   // Restore this room's chat history from a prior session as soon as we
   // join it, so reopening the app doesn't lose the conversation.
@@ -992,141 +909,6 @@ function App() {
   // Join screen - always shown on launch, pre-filled with whatever room ID
   // and username were used last time, so returning is a single click but
   // switching rooms/identities is always just as visible an option.
-  if (showSettings) {
-    const shortcutRows: { key: keyof Shortcuts; label: string }[] = [
-      { key: 'toggleOverlay', label: 'Show/hide Drift' },
-      { key: 'openChat', label: 'Open chat and start typing' },
-      { key: 'dismissInput', label: 'Dismiss input' },
-    ]
-
-    return (
-      <div className="app-shell">
-        <div
-          className="app-container"
-          onMouseEnter={() => setIsHovered(true)}
-          onMouseLeave={() => setIsHovered(false)}
-          style={containerStyle}
-        >
-          <div className="chat-header">
-            <button className="leave-button" onClick={() => setShowSettings(false)} title="Back">
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="m15 18-6-6 6-6" />
-              </svg>
-            </button>
-            <h2>Settings</h2>
-            {isElectron && (
-              <>
-                <button className="minimize-button" onClick={handleToggleMinimize}>–</button>
-                <button className="close-button" onClick={handleClose}>×</button>
-              </>
-            )}
-          </div>
-
-          <div className="settings-body">
-            <div className="settings-row">
-              <label htmlFor="settings-sound">Message sounds</label>
-              <input
-                id="settings-sound"
-                type="checkbox"
-                checked={soundEnabled}
-                onChange={(e) => setSoundEnabled(e.target.checked)}
-              />
-            </div>
-
-            <div className="settings-row settings-row-slider">
-              <label htmlFor="settings-volume">Volume</label>
-              <input
-                id="settings-volume"
-                type="range"
-                min={0}
-                max={100}
-                value={volume}
-                onChange={(e) => setVolume(Number(e.target.value))}
-              />
-            </div>
-
-            <div className="settings-row">
-              <label htmlFor="settings-tone">Notification sound</label>
-              <div className="settings-tone-picker">
-                <select
-                  id="settings-tone"
-                  value={notificationTone}
-                  onChange={(e) => setNotificationTone(e.target.value)}
-                >
-                  {Object.entries(NOTIFICATION_TONES).map(([key, tone]) => (
-                    <option value={key} key={key}>{tone.label}</option>
-                  ))}
-                </select>
-                <button
-                  className="settings-action-button"
-                  onClick={() => {
-                    const tone = NOTIFICATION_TONES[notificationTone]
-                    playBleep(tone.startFreq, tone.endFreq, volume || 50)
-                  }}
-                >
-                  Test
-                </button>
-              </div>
-            </div>
-
-            {isElectron && (
-              <div className="settings-row settings-row-position">
-                <label>Overlay position</label>
-                <div className="position-grid">
-                  {ZONE_GRID.flat().map((zone, i) => (
-                    zone === null ? <span key={i} /> : (
-                      <button
-                        key={zone}
-                        className={`position-cell${zone === overlayZone ? ' active' : ''}${zone === 'free' ? ' position-cell-free' : ''}`}
-                        title={ZONE_LABELS[zone]}
-                        onClick={() => window.electronAPI?.send('set-overlay-zone', zone)}
-                      >
-                        {zone === 'free' && <span className="position-cell-dot" />}
-                      </button>
-                    )
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="settings-row">
-              <label>Chat history</label>
-              <button className="settings-action-button" onClick={handleClearHistory}>Clear</button>
-            </div>
-
-            {isElectron && (
-              <>
-                <div className="settings-divider">Keyboard shortcuts</div>
-                {shortcutRows.map(({ key, label }) => (
-                  <div className="settings-row settings-row-shortcut" key={key}>
-                    <label>{label}</label>
-                    {recordingShortcut === key ? (
-                      <span className="shortcut-recording">Press a key…</span>
-                    ) : (
-                      <button
-                        className="settings-action-button shortcut-value"
-                        onClick={() => handleStartRecordingShortcut(key)}
-                      >
-                        {shortcuts?.[key] ?? '…'}
-                      </button>
-                    )}
-                    {shortcutError === key && <span className="shortcut-error">Already in use</span>}
-                    {shortcutError !== key && shortcutStatus[key as keyof ShortcutStatus] === false && (
-                      <span className="shortcut-error" title="Something else on your system already has this combo - try a different one">
-                        Not active - try another combo
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </>
-            )}
-          </div>
-        </div>
-        {resizeHandles}
-      </div>
-    )
-  }
-
   if (!username || !roomId) {
     return (
       <div className="app-shell">
@@ -1138,17 +920,8 @@ function App() {
         >
           <div className="chat-header">
             <h2>Drift</h2>
-            <button className="settings-button" onClick={() => setShowSettings(true)} title="Settings">
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="3" />
-                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-              </svg>
-            </button>
             {isElectron && (
-              <>
-                <button className="minimize-button" onClick={handleToggleMinimize}>–</button>
-                <button className="close-button" onClick={handleClose}>×</button>
-              </>
+              <button className="minimize-button" onClick={handleToggleMinimize}>–</button>
             )}
           </div>
           <div className="username-prompt">
@@ -1193,17 +966,8 @@ function App() {
               <polyline points="9 22 9 12 15 12 15 22" />
             </svg>
           </button>
-          <button className="settings-button" onClick={() => setShowSettings(true)} title="Settings">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-            </svg>
-          </button>
           {isElectron && (
-            <>
-              <button className="minimize-button" onClick={handleToggleMinimize}>–</button>
-              <button className="close-button" onClick={handleClose}>×</button>
-            </>
+            <button className="minimize-button" onClick={handleToggleMinimize}>–</button>
           )}
         </div>
 
@@ -1249,7 +1013,7 @@ function App() {
           )}
         </div>
 
-        <div className="chat-input">
+        <div className={`chat-input${showInput ? ' visible' : ''}`}>
           <input
             ref={chatInputRef}
             type="text"

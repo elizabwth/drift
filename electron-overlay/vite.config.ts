@@ -44,6 +44,19 @@ export default defineConfig({
     ]),
     renderer(),
   ],
+  build: {
+    // Two real HTML entry points now - the chat overlay (index.html) and
+    // the standalone Settings window (settings.html, see the 2026-09-18
+    // tray rework). Vite's dev server serves any .html by its own path
+    // automatically with no config, but a production build only picks up
+    // index.html by default unless every entry is listed explicitly here.
+    rollupOptions: {
+      input: {
+        main: 'index.html',
+        settings: 'settings.html',
+      },
+    },
+  },
   server: {
     port: 5173,
   },

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, screen, globalShortcut, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, screen, globalShortcut, shell, Tray, Menu, nativeImage } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import fs from 'fs'
 import path from 'path'
@@ -6,6 +6,17 @@ import { fileURLToPath } from 'url'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
+
+// A stray second launch (e.g. re-running the dev script before confirming
+// the first attempt actually failed) used to run alongside the first with
+// no warning - globalShortcut.register() fails *silently* on a conflict,
+// so whichever instance lost the race just had a permanently dead hotkey
+// with zero indication why. Refusing a second instance outright, and
+// focusing the existing window instead (see 'second-instance' below),
+// makes that failure mode structurally impossible.
+if (!app.requestSingleInstanceLock()) {
+  app.quit()
+}
 
 const MIN_WIDTH = 280
 const MIN_HEIGHT = 300
@@ -180,7 +191,50 @@ function registerGlobalShortcuts() {
   for (const key of GLOBAL_SHORTCUT_KEYS) {
     registerOneGlobalShortcut(key)
   }
+  applyDismissGlobalRegistration()
 }
+
+// dismissInput becomes a genuinely global hotkey too (like toggleOverlay/
+// openChat above), but ONLY for as long as chat is actually engaged (see
+// set-chat-engaged below) - Drift's window frequently doesn't have real OS
+// keyboard focus even while its click-through is disabled and chat is
+// visibly up (the game underneath can keep focus), so the renderer's own
+// local keydown listener never sees the press in that case. It stays
+// unregistered the rest of the time, on purpose - unlike toggleOverlay/
+// openChat, swallowing this key at every other moment (including while
+// chat isn't even open) would eat it from every other running app too,
+// including the game's own pause menu if it happens to share the same key.
+let dismissGloballyWanted = false
+let dismissRegisteredAccelerator: string | null = null
+
+function applyDismissGlobalRegistration() {
+  if (dismissRegisteredAccelerator) {
+    globalShortcut.unregister(dismissRegisteredAccelerator)
+    dismissRegisteredAccelerator = null
+  }
+  if (!dismissGloballyWanted) return
+  try {
+    const accel = shortcuts.dismissInput
+    if (globalShortcut.register(accel, () => {
+      mainWindow?.webContents.send('shortcut-dismiss-input')
+    })) {
+      dismissRegisteredAccelerator = accel
+    }
+  } catch {
+    // Conflicting/malformed accelerator - the local focus-only listener in
+    // the renderer is still there as a fallback, same as before this
+    // existed.
+  }
+}
+
+// Told by the renderer whenever whether chat is actually engaged changes
+// (see the isMouseActive-keyed effect in App.tsx) - this is the single
+// source of truth for whether the global dismiss hook above should exist
+// right now.
+ipcMain.on('set-chat-engaged', (_event, engaged: boolean) => {
+  dismissGloballyWanted = engaged
+  applyDismissGlobalRegistration()
+})
 
 ipcMain.handle('get-shortcuts', () => ({ shortcuts, status: shortcutStatus }))
 
@@ -189,8 +243,9 @@ ipcMain.handle('set-shortcut', (_event, { key, accelerator }: { key: keyof Short
   shortcuts[key] = accelerator
 
   if ((GLOBAL_SHORTCUT_KEYS as readonly string[]).includes(key)) {
-    // unregisterAll() wipes every global shortcut, not just this one, so
-    // both have to be re-registered together either way.
+    // unregisterAll() wipes every global shortcut, not just this one -
+    // including the dismiss hook above if it's currently active - so
+    // everything has to be re-applied together either way.
     globalShortcut.unregisterAll()
     let ok = true
     for (const k of GLOBAL_SHORTCUT_KEYS) {
@@ -203,15 +258,35 @@ ipcMain.handle('set-shortcut', (_event, { key, accelerator }: { key: keyof Short
       shortcuts[key] = previous
       globalShortcut.unregisterAll()
       for (const k of GLOBAL_SHORTCUT_KEYS) registerOneGlobalShortcut(k)
+      applyDismissGlobalRegistration()
       return { success: false }
     }
+    applyDismissGlobalRegistration()
+  } else if (key === 'dismissInput') {
+    // Not in GLOBAL_SHORTCUT_KEYS (see above), but still needs to pick up
+    // a live rebind immediately if the dismiss hook happens to be active
+    // right now.
+    applyDismissGlobalRegistration()
   }
 
   saveShortcuts(shortcuts)
+  // Settings is where this call came from, but the chat window's own
+  // "no-messages" hint text and dismiss-key matching both read shortcuts
+  // too (see App.tsx) - it has no other way to learn about the change
+  // since it's a completely separate window/React tree now.
+  mainWindow?.webContents.send('shortcuts-updated', shortcuts)
   return { success: true }
 })
 
 let mainWindow: BrowserWindow | null = null
+// The standalone Settings window (2026-09-18 tray rework) - null whenever
+// it's not open, which is most of the time; opened on demand from the
+// tray menu (see createSettingsWindow/createTray below), not at launch.
+let settingsWindow: BrowserWindow | null = null
+// Set right before a real app.quit() (tray's Close item, or before-quit)
+// so mainWindow's own 'close' handler below knows to actually let it
+// close instead of just hiding it to the tray.
+let isQuitting = false
 // The window's bounds while NOT shrunk to the corner bubble - this is what
 // gets persisted and what "restore" snaps back to, so minimizing never
 // clobbers the size/position the user actually cares about remembering.
@@ -237,6 +312,7 @@ function persistBoundsDebounced() {
 function applyOverlayZone(zone: OverlayZone) {
   currentZone = zone
   mainWindow?.webContents.send('overlay-zone-changed', currentZone)
+  settingsWindow?.webContents.send('overlay-zone-changed', currentZone)
   if (zone === 'free' || !mainWindow) {
     saveWindowState({ ...normalBounds, snapZone: currentZone })
     return
@@ -282,6 +358,9 @@ function createWindow() {
     backgroundColor: '#00000000',
     hasShadow: false,
     roundedCorners: true,
+    // Lives in the tray now (2026-09-18 rework) - Settings and Close are
+    // both reached from there, not a taskbar icon.
+    skipTaskbar: true,
     icon: path.join(__dirname, '../build/icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -376,6 +455,7 @@ function createWindow() {
     if (!isApplyingZone && currentZone !== 'free' && !isMinimized) {
       currentZone = 'free'
       mainWindow?.webContents.send('overlay-zone-changed', currentZone)
+      settingsWindow?.webContents.send('overlay-zone-changed', currentZone)
     }
   })
 
@@ -410,11 +490,11 @@ function createWindow() {
     }
   })
 
-  // Handle close window request from renderer
-  ipcMain.on('close-window', () => {
-    if (mainWindow) {
-      mainWindow.close()
-    }
+  // Settings is a real separate window now (see createSettingsWindow) -
+  // it can't reach into the chat window's React state to clear messages,
+  // so it asks main to relay the request instead.
+  ipcMain.on('clear-chat-history', () => {
+    mainWindow?.webContents.send('clear-chat-history')
   })
 
   // Click-through while idle: mouse clicks (and drags) pass straight to
@@ -482,14 +562,92 @@ function createWindow() {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'))
   }
 
+  // Frameless with no close button of its own now (see skipTaskbar above) -
+  // the only way to close it is the tray's "Close" item, which sets
+  // isQuitting first. Anything else that could otherwise close it (Alt+F4,
+  // an OS shutdown prompt) hides it to the tray instead, same as a normal
+  // tray-resident app - this isn't a real quit.
+  mainWindow.on('close', (e) => {
+    if (isQuitting) return
+    e.preventDefault()
+    mainWindow?.hide()
+  })
+
   mainWindow.on('closed', () => {
     mainWindow = null
   })
 }
 
+// A real, normal window (native title bar, resizable, closable the usual
+// way) - unlike mainWindow, this isn't an overlay, so none of the
+// frameless/transparent/always-on-top/click-through machinery applies.
+// Opened on demand from the tray menu; reused (just focused) if already
+// open rather than creating a second one.
+function createSettingsWindow() {
+  if (settingsWindow) {
+    settingsWindow.show()
+    settingsWindow.focus()
+    return
+  }
+
+  settingsWindow = new BrowserWindow({
+    width: 420,
+    height: 640,
+    minWidth: 360,
+    minHeight: 480,
+    title: 'Drift Settings',
+    backgroundColor: '#121620',
+    icon: path.join(__dirname, '../build/icon.png'),
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      nodeIntegration: false,
+      contextIsolation: true,
+    },
+  })
+
+  if (process.env.VITE_DEV_SERVER_URL) {
+    settingsWindow.loadURL(process.env.VITE_DEV_SERVER_URL.replace(/\/$/, '') + '/settings.html')
+  } else {
+    settingsWindow.loadFile(path.join(__dirname, '../dist/settings.html'))
+  }
+
+  settingsWindow.on('closed', () => {
+    settingsWindow = null
+  })
+}
+
+let tray: Tray | null = null
+
+function createTray() {
+  const trayIcon = nativeImage.createFromPath(path.join(__dirname, '../build/icon.png')).resize({ width: 16, height: 16 })
+  tray = new Tray(trayIcon)
+  tray.setToolTip('Drift')
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: 'Settings', click: () => createSettingsWindow() },
+    { label: 'Close', click: () => { isQuitting = true; app.quit() } },
+  ]))
+  // The tray menu only has Settings/Close, on purpose - but mainWindow's
+  // own 'close' handler above can leave it merely hidden (not quit), and
+  // hidden has no other way back without this: left-clicking the tray
+  // icon itself is the conventional way every tray-resident app handles
+  // "bring my window back", so it doubles as that recovery path.
+  tray.on('click', () => {
+    mainWindow?.show()
+    mainWindow?.focus()
+  })
+}
+
+app.on('second-instance', () => {
+  if (!mainWindow) return
+  if (mainWindow.isMinimized()) mainWindow.restore()
+  mainWindow.show()
+  mainWindow.focus()
+})
+
 app.whenReady().then(() => {
   createWindow()
   registerGlobalShortcuts()
+  createTray()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -513,6 +671,7 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
+  isQuitting = true
   if (saveStateTimeout) clearTimeout(saveStateTimeout)
   if (!isMinimized && mainWindow) {
     normalBounds = mainWindow.getBounds()
