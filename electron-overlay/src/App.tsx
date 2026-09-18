@@ -770,6 +770,9 @@ function App() {
     // Settings has no way to reach this window's messages/roomId directly,
     // being a completely separate window now.
     window.electronAPI?.on('clear-chat-history', handleClearHistory)
+    // 2026-09-18: the title bar (and its leave/minimize buttons) is gone -
+    // "Home" now lives in the tray instead, sent as a plain IPC event.
+    window.electronAPI?.on('tray-leave-room', handleLeaveRoom)
   }, [isElectron])
 
   // Finishes the openChat shortcut's restore-then-focus sequence once the
@@ -918,12 +921,6 @@ function App() {
           onMouseLeave={() => setIsHovered(false)}
           style={containerStyle}
         >
-          <div className="chat-header">
-            <h2>Drift</h2>
-            {isElectron && (
-              <button className="minimize-button" onClick={handleToggleMinimize}>–</button>
-            )}
-          </div>
           <div className="username-prompt">
             <h3>Join a room</h3>
             <input
@@ -958,18 +955,6 @@ function App() {
         onMouseLeave={() => setIsHovered(false)}
         style={containerStyle}
       >
-        <div className="chat-header">
-          <h2>Drift</h2>
-          <button className="leave-button" onClick={handleLeaveRoom} title="Back to room select">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-              <polyline points="9 22 9 12 15 12 15 22" />
-            </svg>
-          </button>
-          {isElectron && (
-            <button className="minimize-button" onClick={handleToggleMinimize}>–</button>
-          )}
-        </div>
 
         <div className="room-bar">
           <span className="room-bar-id" title={`${roomId} - click to copy`} onClick={handleCopyRoomId}>{roomId}</span>

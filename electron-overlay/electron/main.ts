@@ -623,14 +623,25 @@ function createTray() {
   tray = new Tray(trayIcon)
   tray.setToolTip('Drift')
   tray.setContextMenu(Menu.buildFromTemplate([
+    // 2026-09-18: the chat window's title bar is gone - Home (leave room)
+    // and Minimize moved here from its old leave/minimize buttons. Both
+    // are just forwarded to the renderer, same as a hotkey would be: Home
+    // has no main-process-side state of its own (username/roomId only
+    // exist in React state), and Minimize reuses the exact same
+    // 'shortcut-toggle-overlay' event the toggleOverlay accelerator
+    // already sends, since it's literally the same action.
+    { label: 'Home', click: () => mainWindow?.webContents.send('tray-leave-room') },
+    { label: 'Minimize', click: () => mainWindow?.webContents.send('shortcut-toggle-overlay') },
     { label: 'Settings', click: () => createSettingsWindow() },
+    { type: 'separator' },
     { label: 'Close', click: () => { isQuitting = true; app.quit() } },
   ]))
-  // The tray menu only has Settings/Close, on purpose - but mainWindow's
-  // own 'close' handler above can leave it merely hidden (not quit), and
-  // hidden has no other way back without this: left-clicking the tray
-  // icon itself is the conventional way every tray-resident app handles
-  // "bring my window back", so it doubles as that recovery path.
+  // The tray menu covers window-lifecycle actions that used to live in the
+  // title bar - but mainWindow's own 'close' handler above can leave it
+  // merely hidden (not quit), and hidden has no other way back without
+  // this: left-clicking the tray icon itself is the conventional way
+  // every tray-resident app handles "bring my window back", so it doubles
+  // as that recovery path.
   tray.on('click', () => {
     mainWindow?.show()
     mainWindow?.focus()

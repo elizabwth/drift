@@ -18,12 +18,28 @@
   border: 1px solid $color-border-strong;
   transition: opacity $transition-smooth, background-color $transition-smooth, border-color $transition-smooth;
 
-  // Idle-fade for the chat view specifically: the panel chrome (header,
-  // room bar, connect status) fades away entirely, but message bubbles are
-  // excluded so the conversation stays readable the whole time - like a
-  // game's own chat overlay, not a window that dims. Applied via a class
-  // rather than the whole-container opacity join/settings use, since
-  // fading .message too would defeat the point.
+  // No title bar (2026-09-18: removed along with the leave/minimize
+  // buttons, both now reached from the tray instead) - the panel itself is
+  // the drag handle. Interactive children opt back out below so clicks,
+  // text selection, and scrolling still work; .app-container-mini (the
+  // minimized bubble) opts out entirely further down, since it's restored
+  // by a hold gesture, not dragged.
+  -webkit-app-region: drag;
+
+  .room-bar,
+  .chat-messages-wrapper,
+  .chat-input,
+  .username-prompt,
+  .resize-handle {
+    -webkit-app-region: no-drag;
+  }
+
+  // Idle-fade for the chat view specifically: the panel chrome (room bar,
+  // connect status) fades away entirely, but message bubbles are excluded
+  // so the conversation stays readable the whole time - like a game's own
+  // chat overlay, not a window that dims. Applied via a class rather than
+  // the whole-container opacity join/settings use, since fading .message
+  // too would defeat the point.
   //
   // .chat-input is deliberately NOT in this group (see its own rule
   // below) - it has its own visibility, driven by showInput in App.tsx,
@@ -33,7 +49,6 @@
     background-color: transparent;
     border-color: transparent;
 
-    .chat-header,
     .room-bar,
     .connect-status,
     .jump-to-bottom {
@@ -42,7 +57,6 @@
     }
   }
 
-  .chat-header,
   .room-bar,
   .connect-status,
   .jump-to-bottom {
@@ -55,6 +69,10 @@
   justify-content: center;
   cursor: pointer;
   position: relative;
+  // Fixed-position bubble restored by a hold gesture (see isHoldingMini),
+  // not dragged - overrides .app-container's own drag-by-default above
+  // (same specificity, later in the sheet wins).
+  -webkit-app-region: no-drag;
 
   .mini-icon {
     width: 60%;
@@ -178,52 +196,6 @@
   bottom: 0;
   right: 0;
   cursor: nwse-resize;
-}
-
-.chat-header {
-  background: $color-bg-darker;
-  padding: $spacing-md $spacing-lg;
-  border-bottom: 1px solid $color-border;
-  border-radius: $radius-lg $radius-lg 0 0;
-  -webkit-app-region: drag;
-  user-select: none;
-  display: flex;
-  align-items: center;
-  gap: $spacing-sm;
-
-  h2 {
-    margin: 0 auto 0 0;
-    font-size: $font-size-md;
-    font-weight: normal;
-    color: $color-text-muted;
-  }
-
-  .leave-button,
-  .minimize-button {
-    -webkit-app-region: no-drag;
-    background: transparent;
-    border: none;
-    color: $color-text-muted;
-    font-size: 20px;
-    line-height: 1;
-    cursor: pointer;
-    padding: 0;
-    width: 20px;
-    height: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: color $transition-fast;
-
-    &:hover {
-      color: $color-text;
-    }
-
-    &:active {
-      color: $color-text-subtle;
-    }
-  }
-
 }
 
 // Page shell for the standalone Settings window (see Settings.tsx) - a

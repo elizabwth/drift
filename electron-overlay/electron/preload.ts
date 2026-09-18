@@ -11,7 +11,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     }
   },
   on: (channel: string, callback: Function) => {
-    const validChannels = ['message-received', 'overlay-toggled', 'shortcut-toggle-overlay', 'shortcut-open-chat', 'overlay-zone-changed', 'shortcut-dismiss-input', 'clear-chat-history', 'shortcuts-updated']
+    const validChannels = ['message-received', 'overlay-toggled', 'shortcut-toggle-overlay', 'shortcut-open-chat', 'overlay-zone-changed', 'shortcut-dismiss-input', 'clear-chat-history', 'shortcuts-updated', 'tray-leave-room']
     if (validChannels.includes(channel)) {
       ipcRenderer.on(channel, (event, ...args) => callback(...args))
     }
