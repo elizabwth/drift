@@ -427,11 +427,15 @@ function App() {
       // always true for cellular carriers) - it needs an actual relay to
       // fall back to. Previously used Open Relay Project's free public
       // TURN service, but it (and every other free demo TURN tried) is
-      // now dead/unreachable - self-hosted on bazzie instead. Both the
-      // LAN and public addresses are listed since whichever one a given
-      // client can actually reach depends on where it's connecting from.
-      { urls: 'turn:192.168.0.113:3478', username: 'driftrelay', credential: 'REDACTED_TURN_CREDENTIAL' },
-      { urls: 'turn:REDACTED_PUBLIC_IP:3478', username: 'driftrelay', credential: 'REDACTED_TURN_CREDENTIAL' },
+      // now dead/unreachable - self-hosted on bazzie instead.
+      // 2026-09-20: the actual host/credential moved out of this file into
+      // turn-config.local.json (gitignored, build-time-injected as
+      // __TURN_SERVERS__ - see vite.config.ts) since this repo is public -
+      // history was also scrubbed of the old hardcoded values (see the
+      // backup-before-secret-scrub-20260920 branch if that's ever needed).
+      // Empty here just means STUN-only - still works unless a peer is
+      // behind symmetric NAT/CGNAT.
+      ...__TURN_SERVERS__,
     ]
 
     const createPeer = (id: string) =>

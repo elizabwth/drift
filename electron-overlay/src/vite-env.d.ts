@@ -1,6 +1,9 @@
 /// <reference types="vite/client" />
 
 declare const __APP_VERSION__: string
+// Baked in from turn-config.local.json at build time (see vite.config.ts) -
+// empty array when that gitignored file doesn't exist (STUN-only fallback).
+declare const __TURN_SERVERS__: { urls: string; username?: string; credential?: string }[]
 
 interface Shortcuts {
   toggleOverlay: string

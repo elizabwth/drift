@@ -12,6 +12,13 @@ dist
 dist-electron
 release
 *.local
+# *.local above only matches a bare ".local" extension (e.g. "foo.local"),
+# NOT "*.local.json" - verified via `git check-ignore` before trusting it,
+# after almost committing the real TURN secret in turn-config.local.json
+# because of exactly this gap (2026-09-20). Explicit + a general pattern
+# so this can't recur for a similarly-named future local config file.
+turn-config.local.json
+*.local.json
 
 # Editor directories and files
 .vscode/*
