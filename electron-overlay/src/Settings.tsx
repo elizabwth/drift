@@ -4,6 +4,7 @@ import './App.scss'
 import { keyEventToAccelerator } from './shortcutUtils'
 import { NOTIFICATION_TONES, DEFAULT_NOTIFICATION_TONE, playBleep } from './soundUtils'
 import { ZONE_GRID, ZONE_LABELS } from './overlayZones'
+import { CHAT_THEMES, DEFAULT_CHAT_THEME } from './themes'
 
 // Small line-icon set matching the rest of Drift's chrome (the old
 // header's gear/home icons - see App.tsx) - same viewBox/stroke
@@ -75,6 +76,16 @@ const PlayIcon = () => (
   </IconIndent>
 )
 
+const PaletteIcon = () => (
+  <IconIndent>
+    <rect x="3" y="3" width="18" height="18" rx="2" />
+    <circle cx="8" cy="8" r="1.5" />
+    <circle cx="16" cy="8" r="1.5" />
+    <circle cx="8" cy="16" r="1.5" />
+    <circle cx="16" cy="16" r="1.5" />
+  </IconIndent>
+)
+
 // This is a real, normal Electron window (native title bar/close/minimize
 // via the OS) rather than the chat overlay's frameless click-through one -
 // see the 2026-09-18 tray rework in electron/main.ts. It reads/writes the
@@ -95,6 +106,10 @@ function Settings() {
     const saved = localStorage.getItem('drift-notification-tone')
     return saved && NOTIFICATION_TONES[saved] ? saved : DEFAULT_NOTIFICATION_TONE
   })
+  const [chatTheme, setChatTheme] = useState(() => {
+    const saved = localStorage.getItem('drift-chat-theme')
+    return saved && CHAT_THEMES[saved] ? saved : DEFAULT_CHAT_THEME
+  })
   const [shortcuts, setShortcuts] = useState<Shortcuts | null>(null)
   const [shortcutStatus, setShortcutStatus] = useState<ShortcutStatus>({})
   const [recordingShortcut, setRecordingShortcut] = useState<keyof Shortcuts | null>(null)
@@ -112,6 +127,10 @@ function Settings() {
   useEffect(() => {
     localStorage.setItem('drift-notification-tone', notificationTone)
   }, [notificationTone])
+
+  useEffect(() => {
+    localStorage.setItem('drift-chat-theme', chatTheme)
+  }, [chatTheme])
 
   useEffect(() => {
     window.electronAPI?.getShortcuts().then(({ shortcuts, status }) => {
@@ -216,6 +235,21 @@ function Settings() {
             >
               <PlayIcon />
             </button>
+          </div>
+        </div>
+
+        <div className="settings-row">
+          <label><PaletteIcon />Chat theme</label>
+          <div className="theme-swatches">
+            {Object.entries(CHAT_THEMES).map(([key, theme]) => (
+              <button
+                key={key}
+                className={`theme-swatch${key === chatTheme ? ' active' : ''}`}
+                style={{ backgroundColor: theme.accent }}
+                title={theme.label}
+                onClick={() => setChatTheme(key)}
+              />
+            ))}
           </div>
         </div>
 

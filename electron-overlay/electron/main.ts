@@ -654,25 +654,68 @@ function createSettingsWindow() {
 ipcMain.on('open-settings', () => createSettingsWindow())
 
 let tray: Tray | null = null
+// Set once autoUpdater has a downloaded update sitting ready - see the
+// 'update-downloaded' listener below. Drives whether the tray menu shows
+// a "Restart to update" item.
+let updateReady = false
+
+// Module-level (not just inside the periodic setInterval) so the tray's
+// own on-demand "Check for Updates" item can call the exact same check,
+// for whoever doesn't want to wait even the 10s background interval out.
+function checkForUpdates() {
+  autoUpdater.checkForUpdatesAndNotify().catch((err) => {
+    console.error('autoUpdater check failed:', err)
+  })
+}
+
+function buildTrayMenu() {
+  // 2026-09-18: the chat window's title bar is gone - Home (leave room)
+  // and Minimize moved here from its old leave/minimize buttons. Both
+  // are just forwarded to the renderer, same as a hotkey would be: Home
+  // has no main-process-side state of its own (username/roomId only
+  // exist in React state), and Minimize reuses the exact same
+  // 'shortcut-toggle-overlay' event the toggleOverlay accelerator
+  // already sends, since it's literally the same action.
+  const template: Electron.MenuItemConstructorOptions[] = [
+    { label: 'Home', click: () => mainWindow?.webContents.send('tray-leave-room') },
+    { label: 'Minimize', click: () => mainWindow?.webContents.send('shortcut-toggle-overlay') },
+    { label: 'Settings', click: () => createSettingsWindow() },
+  ]
+  // No update feed in dev, and no point offering it once one's already
+  // downloaded and just waiting on a restart.
+  if (app.isPackaged && !updateReady) {
+    template.push({ label: 'Check for Updates', click: () => checkForUpdates() })
+  }
+  // 2026-09-18 ("better auto-update experience"): being tray-resident
+  // (skipTaskbar, hide-not-close on mainWindow's 'close' handler) means
+  // this app might genuinely never quit for days - electron-updater's
+  // default behavior only installs a downloaded update on the *next*
+  // quit, which could now be an arbitrarily long wait with zero
+  // indication anything is waiting. Surfacing it directly in the tray,
+  // the one UI element guaranteed to always be reachable, closes that gap
+  // without forcing an unannounced restart on anyone.
+  if (updateReady) {
+    template.push(
+      { type: 'separator' },
+      { label: 'Restart to update', click: () => { isQuitting = true; autoUpdater.quitAndInstall() } },
+    )
+  }
+  template.push(
+    { type: 'separator' },
+    { label: 'Close', click: () => { isQuitting = true; app.quit() } },
+  )
+  return Menu.buildFromTemplate(template)
+}
+
+function refreshTrayMenu() {
+  tray?.setContextMenu(buildTrayMenu())
+}
 
 function createTray() {
   const trayIcon = nativeImage.createFromPath(getIconPath()).resize({ width: 16, height: 16 })
   tray = new Tray(trayIcon)
   tray.setToolTip('Drift')
-  tray.setContextMenu(Menu.buildFromTemplate([
-    // 2026-09-18: the chat window's title bar is gone - Home (leave room)
-    // and Minimize moved here from its old leave/minimize buttons. Both
-    // are just forwarded to the renderer, same as a hotkey would be: Home
-    // has no main-process-side state of its own (username/roomId only
-    // exist in React state), and Minimize reuses the exact same
-    // 'shortcut-toggle-overlay' event the toggleOverlay accelerator
-    // already sends, since it's literally the same action.
-    { label: 'Home', click: () => mainWindow?.webContents.send('tray-leave-room') },
-    { label: 'Minimize', click: () => mainWindow?.webContents.send('shortcut-toggle-overlay') },
-    { label: 'Settings', click: () => createSettingsWindow() },
-    { type: 'separator' },
-    { label: 'Close', click: () => { isQuitting = true; app.quit() } },
-  ]))
+  tray.setContextMenu(buildTrayMenu())
   // The tray menu covers window-lifecycle actions that used to live in the
   // title bar - but mainWindow's own 'close' handler above can leave it
   // merely hidden (not quit), and hidden has no other way back without
@@ -703,12 +746,25 @@ app.whenReady().then(() => {
     }
   })
 
-  // Checks bugtit.com/drift/latest.yml on launch; downloads silently in the
-  // background and installs on next quit. No-op in dev (no update feed there).
+  // Checks bugtit.com/drift/latest.yml, downloads silently in the
+  // background - see buildTrayMenu above for what happens once it's ready
+  // (a "Restart to update" tray item, since this app might not quit
+  // naturally for a long time otherwise). No-op in dev (no update feed
+  // there).
   if (app.isPackaged) {
-    autoUpdater.checkForUpdatesAndNotify().catch((err) => {
-      console.error('autoUpdater check failed:', err)
+    autoUpdater.on('update-downloaded', () => {
+      updateReady = true
+      refreshTrayMenu()
     })
+    checkForUpdates()
+    // A tray-resident app can easily run for days without ever quitting,
+    // so checking only once at launch could miss releases for just as
+    // long - re-check periodically rather than relying on the next cold
+    // start. latest.yml is tiny (~341 bytes) and this only downloads the
+    // real installer once a newer version is actually found, so a fast
+    // interval is still cheap per-poll - 10s is the user's own explicit
+    // call (started at "every 1 second", talked down to this).
+    setInterval(checkForUpdates, 10 * 1000)
   }
 })
 

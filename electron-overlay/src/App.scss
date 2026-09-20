@@ -307,6 +307,29 @@
   }
 }
 
+.theme-swatches {
+  display: flex;
+  gap: $spacing-sm;
+}
+
+.theme-swatch {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+  transition: border-color $transition-fast, transform $transition-fast;
+
+  &:hover {
+    transform: scale(1.1);
+  }
+
+  &.active {
+    border-color: $color-text;
+  }
+}
+
 .settings-tone-picker {
   display: flex;
   align-items: center;
@@ -465,6 +488,13 @@
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
     border: 1px solid rgba(255, 255, 255, 0.08);
+    // Chat theme (2026-09-18, see themes.ts): a persistent accent-colored
+    // left edge, not just the brief on-arrival glow below - the glow only
+    // ever shows for 1.4s on a message from someone else, which made the
+    // theme picker look broken/no-op when tested solo with no incoming
+    // messages to trigger it. This is visible on every message, always,
+    // with no interaction needed.
+    border-left: 3px solid var(--drift-accent, #818cf8);
     padding: $spacing-sm $spacing-md;
     border-radius: $radius-md;
     word-wrap: break-word;
@@ -523,12 +553,19 @@
   }
 }
 
+// Chat theme (2026-09-18, see themes.ts): color-mix() against transparent
+// is how a themeable *translucent* glow works with a single --drift-accent
+// custom property, since rgba() can't take a CSS variable as its R/G/B
+// channels directly. #818cf8 (the original hardcoded indigo, unchanged)
+// is the fallback for the "Default" theme / anywhere the property isn't
+// set at all, like Settings' own DOM tree.
 @keyframes messageGlowPulse {
   0% {
-    box-shadow: 0 0 0 1px rgba(129, 140, 248, 0.6), 0 0 16px 2px rgba(129, 140, 248, 0.45);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--drift-accent, #818cf8) 60%, transparent),
+      0 0 16px 2px color-mix(in srgb, var(--drift-accent, #818cf8) 45%, transparent);
   }
   100% {
-    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08), 0 0 0 0 rgba(129, 140, 248, 0);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08), 0 0 0 0 transparent;
   }
 }
 
@@ -608,7 +645,11 @@
 
     &:focus {
       outline: none;
-      border-color: $color-border-focus;
+      // Chat theme (2026-09-18, see themes.ts) - falls back to the
+      // original hardcoded indigo when --drift-accent isn't set (i.e.
+      // "Default" theme, or anywhere outside the chat window's own DOM
+      // tree, like Settings).
+      border-color: var(--drift-accent, #{$color-border-focus});
       background: $color-bg-light-hover;
     }
   }
@@ -616,7 +657,10 @@
   button {
     padding: $spacing-sm $spacing-xl;
     background: $color-bg-button;
-    border: 1px solid $color-scrollbar;
+    // Chat theme (2026-09-18): persistently themed, not just on :hover
+    // below - visible the instant a theme is picked, without needing to
+    // interact with anything first.
+    border: 1px solid var(--drift-accent, #818cf8);
     border-radius: $radius-md;
     color: $color-text;
     font-size: $font-size-sm;
@@ -625,7 +669,7 @@
 
     &:hover {
       background: $color-bg-button-hover;
-      border-color: $color-border-focus;
+      border-color: var(--drift-accent, #{$color-border-focus});
     }
 
     &:active {
@@ -705,7 +749,7 @@
 
     &:focus {
       outline: none;
-      border-color: $color-border-focus;
+      border-color: var(--drift-accent, #{$color-border-focus});
       background: $color-bg-light-hover;
     }
   }
@@ -713,7 +757,10 @@
   button {
     padding: $spacing-sm $spacing-xl;
     background: $color-bg-button;
-    border: 1px solid $color-scrollbar;
+    // Chat theme (2026-09-18): persistently themed, not just on :hover
+    // below - visible the instant a theme is picked, without needing to
+    // interact with anything first.
+    border: 1px solid var(--drift-accent, #818cf8);
     border-radius: $radius-md;
     color: $color-text;
     font-size: $font-size-sm;
@@ -722,7 +769,7 @@
 
     &:hover {
       background: $color-bg-button-hover;
-      border-color: $color-border-focus;
+      border-color: var(--drift-accent, #{$color-border-focus});
     }
 
     &:active {

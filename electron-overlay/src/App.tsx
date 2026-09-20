@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect } from 'react'
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import Peer, { DataConnection } from 'peerjs'
 import './App.scss'
 import { keyEventToAccelerator } from './shortcutUtils'
 import { NOTIFICATION_TONES, DEFAULT_NOTIFICATION_TONE, playBleep } from './soundUtils'
+import { CHAT_THEMES, DEFAULT_CHAT_THEME } from './themes'
 
 interface ChatMessage {
   username: string
@@ -136,6 +137,13 @@ function App() {
     const saved = localStorage.getItem('drift-notification-tone')
     return saved && NOTIFICATION_TONES[saved] ? saved : DEFAULT_NOTIFICATION_TONE
   })
+  // Chat theme (2026-09-18, see themes.ts) - picked in Settings, applied
+  // here via --drift-accent on containerStyle below. Same localStorage +
+  // cross-window 'storage' event pattern as the other three prefs above.
+  const [chatTheme, setChatTheme] = useState(() => {
+    const saved = localStorage.getItem('drift-chat-theme')
+    return saved && CHAT_THEMES[saved] ? saved : DEFAULT_CHAT_THEME
+  })
   // Settings (sound/volume/tone, shortcut rebinding, overlay position, the
   // gear icon itself) moved to its own standalone window in the 2026-09-18
   // tray rework - see Settings.tsx. `shortcuts` stays here too since this
@@ -201,19 +209,26 @@ function App() {
     localStorage.setItem('drift-notification-tone', notificationTone)
   }, [notificationTone])
 
-  // Sound/volume/tone are edited in the standalone Settings window now
-  // (see Settings.tsx), a separate React tree with no shared state - the
-  // browser's native 'storage' event is what closes that gap: it fires
-  // here automatically whenever *another* window with the same origin
-  // changes a localStorage key (never in the window that made the change
-  // itself, which is exactly what's wanted - this window already updates
-  // its own state directly when it's the one editing something).
+  useEffect(() => {
+    localStorage.setItem('drift-chat-theme', chatTheme)
+  }, [chatTheme])
+
+  // Sound/volume/tone/theme are edited in the standalone Settings window
+  // now (see Settings.tsx), a separate React tree with no shared state -
+  // the browser's native 'storage' event is what closes that gap: it
+  // fires here automatically whenever *another* window with the same
+  // origin changes a localStorage key (never in the window that made the
+  // change itself, which is exactly what's wanted - this window already
+  // updates its own state directly when it's the one editing something).
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
       if (e.key === 'drift-volume' && e.newValue !== null) setVolume(Number(e.newValue))
       if (e.key === 'drift-sound-enabled') setSoundEnabled(e.newValue !== 'false')
       if (e.key === 'drift-notification-tone' && e.newValue && NOTIFICATION_TONES[e.newValue]) {
         setNotificationTone(e.newValue)
+      }
+      if (e.key === 'drift-chat-theme' && e.newValue && CHAT_THEMES[e.newValue]) {
+        setChatTheme(e.newValue)
       }
     }
     window.addEventListener('storage', onStorage)
@@ -274,8 +289,15 @@ function App() {
   // the solid color was previously "safe" only because idle could never be
   // true while unattached, so this inline/stylesheet conflict never had a
   // chance to actually show up).
-  const containerStyle = {
+  const containerStyle: CSSProperties = {
     backgroundColor: !isAttached && !isIdle ? '#121620' : undefined,
+    // Chat theme (2026-09-18, see themes.ts) - a plain CSS custom property
+    // so App.scss's chat-specific rules (message glow, input focus ring)
+    // can read it with a fallback, cascading to every element inside this
+    // container without threading the color through each one individually.
+    // TS's CSSProperties doesn't know about arbitrary custom properties by
+    // name, hence the cast.
+    ['--drift-accent' as string]: CHAT_THEMES[chatTheme].accent,
   }
 
   // Click-through while inactive: only in the chat view itself - join/
